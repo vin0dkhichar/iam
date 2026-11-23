@@ -23,3 +23,9 @@ class SyncStatus(StrEnum):
     SYNCING = "syncing"
     SYNCED = "synced"
     FAILED = "failed"
+
+
+class SyncAction(StrEnum):
+    CREATE = "create"
+    DELETE = "delete"
+    UPDATE_ROLES = "update_roles"

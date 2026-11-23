@@ -1,4 +1,4 @@
-# Shared ruff config for the python packages (iam-core, iam-*-portal-api).
+# Shared ruff config for the python packages (iam-core, iam-*-api).
 # ruff is used as a LINTER only (black is the formatter); keep line-length in
 # sync with black so lint rules agree with the formatter.
 line-length = 110

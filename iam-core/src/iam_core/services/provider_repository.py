@@ -54,6 +54,12 @@ class ProviderRepository(BaseService):
         self._by_id_cache: dict[int, tuple[LoginProvider, float]] = {}
         self._by_iss_cache: dict[str, tuple[_ApiLoginProvider | None, float]] = {}
 
+    async def get_by_client_id(self, client_id: str) -> LoginProvider | None:
+        try:
+            return await LoginProvider.get_by_client_id(client_id)
+        except Exception:
+            return None
+
     async def get_by_id(self, provider_id: int) -> LoginProvider | None:
         now = time.monotonic()
         if provider_id in self._by_id_cache:

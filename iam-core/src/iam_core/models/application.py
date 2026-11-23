@@ -1,10 +1,10 @@
 from typing import Optional
 
 from openg2p_fastapi_common.models import BaseORMModelWithTimes
-from sqlalchemy import Boolean, Integer, String
+from sqlalchemy import Boolean, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .enum import ApplicationType
+from .enum import ApplicationType, SyncStatus
 
 
 class Application(BaseORMModelWithTimes):
@@ -32,3 +32,12 @@ class Application(BaseORMModelWithTimes):
     is_self_registered: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Used when application_type is agent. The worker creates clients, then the group.
+    client_status: Mapped[str] = mapped_column(
+        String, nullable=False, default=SyncStatus.SYNCED.value, server_default=SyncStatus.SYNCED.value
+    )
+    client_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    group_status: Mapped[str] = mapped_column(
+        String, nullable=False, default=SyncStatus.SYNCED.value, server_default=SyncStatus.SYNCED.value
+    )
+    group_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

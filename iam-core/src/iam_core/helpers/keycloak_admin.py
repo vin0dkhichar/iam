@@ -299,6 +299,9 @@ class KeycloakAdmin:
             f"/users/{user_id}/groups/{group_id}",
         )
 
+    async def delete_user(self, client: httpx.AsyncClient, realm: str, user_id: str) -> None:
+        await self._request(client, "DELETE", realm, f"/users/{user_id}", expected=(204, 404))
+
     async def send_password_email(self, client: httpx.AsyncClient, realm: str, user_id: str) -> None:
         """Ask Keycloak to email a link. The person sets the password. We never see it."""
         params: dict[str, str] = {

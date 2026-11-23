@@ -15,7 +15,7 @@
 ## Main components
 
 - Staff controller:
-  - `iam-staff-portal-api/src/iam_staff_portal_api/controllers/auth_controller.py`
+  - `iam-staff-api/src/iam_staff_api/controllers/auth_controller.py`
 - Core orchestration:
   - `iam-core/src/iam_core/services/auth_facade.py` (class `AuthService`)
 - Provider lookup:
@@ -199,7 +199,7 @@ class Settings(BaseSettings):
 Use it while setting cookies in each portal auth callback controller:
 
 ```python
-# iam-staff-portal-api/.../controllers/auth_controller.py
+# iam-staff-api/.../controllers/auth_controller.py
 response.set_cookie(
     "X-Access-Token",
     token_response["access_token"],

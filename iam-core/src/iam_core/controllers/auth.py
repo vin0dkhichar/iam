@@ -52,9 +52,13 @@ class AuthController(BaseController):
         )
         self.router.add_api_route("/callback", self.oauth_callback, methods=["GET"])
 
-    async def _provider_for_this_audience(self, provider_id: int):
+    async def _provider_for_this_audience(self, provider_ref: int | str):
         repository = self.provider_repository or ProviderRepository()
-        provider = await repository.get_by_id(provider_id)
+        text = str(provider_ref).strip()
+        if text.isdigit():
+            provider = await repository.get_by_id(int(text))
+        else:
+            provider = await repository.get_by_client_id(text)
         if provider is None or getattr(provider, "application_type", None) != self.application_type:
             raise UnauthorizedError("G2P-AUT-401", "Invalid Login Provider Id")
         return provider
@@ -119,18 +123,18 @@ class AuthController(BaseController):
         return await self.auth_service.get_login_providers(self.application_type)
 
     async def start_authentication_transaction(
-        self, id: int, redirect_uri: str = "/"
+        self, id: str, redirect_uri: str = "/"
     ) -> StartAuthTransactionResponse:
-        await self._provider_for_this_audience(id)
+        provider = await self._provider_for_this_audience(id)
         return await self.auth_service.start_authentication_transaction(
-            provider_id=id,
+            provider_id=provider.id,
             redirect_uri=redirect_uri,
         )
 
-    async def get_login_provider_redirect(self, id: int, redirect_uri: str = "/") -> RedirectResponse:
-        await self._provider_for_this_audience(id)
+    async def get_login_provider_redirect(self, id: str, redirect_uri: str = "/") -> RedirectResponse:
+        provider = await self._provider_for_this_audience(id)
         response = await self.auth_service.start_authentication_transaction(
-            provider_id=id,
+            provider_id=provider.id,
             redirect_uri=redirect_uri,
         )
         return RedirectResponse(response.redirectUrl)

@@ -5,6 +5,7 @@ exclude: |
   # docker/ and deployments/ keep their own (lightweight) pre-commit configs;
   # the python hooks (black/ruff) must not reformat Dockerfiles or Helm templates
   ^docker/|^deployments/|
+  ^iam-agent-ui/node_modules/|^iam-staff-ui/node_modules/|
   # Maybe reactivate this when all README files include prettier ignore tags?
   ^README\.md$|
   # Repos using Sphinx to generate docs don't need prettying

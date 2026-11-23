@@ -1,6 +1,7 @@
 export interface Application {
   id: number;
   application_mnemonic: string;
+  application_type?: string | null;
   application_description?: string | null;
   application_url?: string | null;
   api_url?: string | null;

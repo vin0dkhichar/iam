@@ -4,7 +4,8 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { Tabs } from "@/components";
+import { AddButton, Button, FormActions, InputField, Modal, Tabs } from "@/components";
+import { toast } from "react-toastify";
 import { useRbac } from "@/context/RbacContext";
 import {
   APPLICATION_ACTIONS,
@@ -67,6 +68,9 @@ export default function ApplicationDetailPage() {
   } = useApplicationData(applicationId);
 
   // Tab state from URL
+  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminSaving, setAdminSaving] = useState(false);
+  const [adminForm, setAdminForm] = useState({ first_name: "", last_name: "", email: "" });
   const [tab, setTab] = useState<TabId>(() => {
     const tabParam = searchParams.get("tab");
     return (tabParam as TabId) || "application";
@@ -133,7 +137,50 @@ export default function ApplicationDetailPage() {
     <div>
       <div className="flex items-center justify-between gap-4 mb-3">
         <h1 className="text-[24px] font-bold text-black mb-4">{app.application_mnemonic}</h1>
+        {app.application_type === "agent" && (
+          <AddButton label={t("addAdmin")} onClick={() => setAdminOpen(true)} />
+        )}
       </div>
+      {adminOpen && (
+        <Modal title={t("addAdmin")} onClose={() => setAdminOpen(false)}>
+          <form
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setAdminSaving(true);
+              try {
+                const response = await fetch("/api/users/create-agency-admin", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    agency_id: app.application_mnemonic,
+                    ...adminForm,
+                  }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                  toast.error(data.detail || data.error || "Failed to add admin");
+                  return;
+                }
+                setAdminOpen(false);
+                setAdminForm({ first_name: "", last_name: "", email: "" });
+                toast.success(t("adminCreated"));
+              } finally {
+                setAdminSaving(false);
+              }
+            }}
+          >
+            <div className="grid gap-4">
+              <InputField label="First name" value={adminForm.first_name} onChange={(value) => setAdminForm((form) => ({ ...form, first_name: value }))} required />
+              <InputField label="Last name" value={adminForm.last_name} onChange={(value) => setAdminForm((form) => ({ ...form, last_name: value }))} required />
+              <InputField label="Email" type="email" value={adminForm.email} onChange={(value) => setAdminForm((form) => ({ ...form, email: value }))} required />
+            </div>
+            <FormActions>
+              <Button type="button" onClick={() => setAdminOpen(false)}>{t("cancel")}</Button>
+              <Button type="submit" disabled={adminSaving}>{adminSaving ? t("saving") : t("save")}</Button>
+            </FormActions>
+          </form>
+        </Modal>
+      )}
 
       <Tabs
         tabs={visibleTabs}

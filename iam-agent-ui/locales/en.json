@@ -1,0 +1,22 @@
+{
+  "appTitle": "Agency administration",
+  "navUsers": "Users",
+  "title": "Users",
+  "signIn": "Sign in",
+  "logout": "Sign out",
+  "firstName": "First name",
+  "lastName": "Last name",
+  "email": "Email",
+  "rolesPlaceholder": "Roles, comma separated",
+  "createUser": "Create user",
+  "name": "Name",
+  "status": "Status",
+  "roles": "Roles",
+  "updateRoles": "Update roles",
+  "delete": "Delete",
+  "loadFailed": "Could not load users",
+  "createFailed": "Could not create user",
+  "updateFailed": "Could not update roles",
+  "deleteFailed": "Could not delete user",
+  "notAdmin": "Only an agency admin can manage agents"
+}

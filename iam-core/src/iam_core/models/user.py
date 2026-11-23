@@ -1,10 +1,10 @@
 import uuid
 
 from openg2p_fastapi_common.models import BaseORMModelWithTimes
-from sqlalchemy import Boolean, Index, String, Text, text
+from sqlalchemy import Index, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from .enum import SyncStatus
+from .enum import SyncAction, SyncStatus
 
 
 class User(BaseORMModelWithTimes):
@@ -24,9 +24,12 @@ class User(BaseORMModelWithTimes):
     first_name: Mapped[str] = mapped_column(String, nullable=False)
     last_name: Mapped[str] = mapped_column(String, nullable=False)
     agency_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
-    is_agency_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     enabled: Mapped[str] = mapped_column(String, nullable=False, default="true")
     keycloak_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Clients and roles the worker must apply in Keycloak. Example:
+    # [{"client_id": "agent-web", "roles": ["AGENCY_ADMIN"]}]
+    keycloak_clients: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    sync_action: Mapped[str] = mapped_column(String, nullable=False, default=SyncAction.CREATE.value)
     sync_status: Mapped[str] = mapped_column(String, nullable=False, default=SyncStatus.PENDING.value)
     sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 

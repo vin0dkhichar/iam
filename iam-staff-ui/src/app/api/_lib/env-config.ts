@@ -2,7 +2,7 @@ export function getServerEnv() {
   return {
     backendApiUrl: process.env.BACKEND_API_URL ?? "",
     masterdataApiUrl: process.env.MASTERDATA_API_URL ?? "",
-    loginProviderId: process.env.LOGIN_PROVIDER_ID ?? "",
+    loginProviderId: process.env.LOGIN_PROVIDER_ID || "staff-portal",
     applicationMnemonic: process.env.APPLICATION_MNEMONIC ?? "iam-staff-ui",
     cookieDomain: process.env.COOKIE_DOMAIN?.trim() ?? "",
     pageSize: parseInt(process.env.PAGE_SIZE ?? "10", 10),

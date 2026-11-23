@@ -17,6 +17,7 @@ import {
 import ApplicationModal, {
   emptyForm as emptyApplicationForm,
 } from "./ApplicationModal";
+import { Modal, InputField, Button, FormActions } from "@/components";
 import { getApplicationColumns } from "@/features/application/utils/applicationTableColumns";
 import { useConfig } from "@/context/ConfigContext";
 
@@ -56,6 +57,8 @@ export default function ApplicationsPageClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [agencyOpen, setAgencyOpen] = useState(false);
+  const [agencyForm, setAgencyForm] = useState({ agency_id: "", name: "" });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -173,6 +176,36 @@ export default function ApplicationsPageClient() {
     }
   }
 
+  async function handleCreateAgency(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await execute("/api/agencies", {
+        method: "POST",
+        body: JSON.stringify({
+          agency_id: agencyForm.agency_id.trim(),
+          name: agencyForm.name.trim(),
+        }),
+      });
+      if (res?.error) {
+        setError(res.error);
+        toast.error(res.error);
+        return;
+      }
+      setAgencyOpen(false);
+      setAgencyForm({ agency_id: "", name: "" });
+      await load(page);
+      toast.success(t("agencyCreated"));
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Create failed";
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openDeleteModal(item: Application) {
     setItemToDelete(item);
     setDeleteModalOpen(true);
@@ -183,7 +216,10 @@ export default function ApplicationsPageClient() {
       <div className="flex items-center justify-between gap-4 mb-6">
         <h1 className="font-semibold text-[24px] text-black">{t("applications")}</h1>
         <Can action="application:create">
-          <AddButton onClick={() => setModalOpen(true)} />
+          <div className="flex gap-3">
+            <AddButton label={t("addAgency")} onClick={() => setAgencyOpen(true)} />
+            <AddButton onClick={() => setModalOpen(true)} />
+          </div>
         </Can>
       </div>
 
@@ -209,6 +245,35 @@ export default function ApplicationsPageClient() {
           />
         )}
       </div>
+
+      {agencyOpen && (
+        <Modal title={t("addAgency")} onClose={() => setAgencyOpen(false)}>
+          <form onSubmit={handleCreateAgency}>
+            <div className="grid gap-4">
+              <InputField
+                label={t("agencyId")}
+                value={agencyForm.agency_id}
+                onChange={(value) => setAgencyForm((form) => ({ ...form, agency_id: value }))}
+                required
+              />
+              <InputField
+                label={t("agencyName")}
+                value={agencyForm.name}
+                onChange={(value) => setAgencyForm((form) => ({ ...form, name: value }))}
+                required
+              />
+            </div>
+            <FormActions>
+              <Button type="button" onClick={() => setAgencyOpen(false)}>
+                {t("cancel")}
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? t("saving") : t("save")}
+              </Button>
+            </FormActions>
+          </form>
+        </Modal>
+      )}
 
       {modalOpen && (
         <ApplicationModal

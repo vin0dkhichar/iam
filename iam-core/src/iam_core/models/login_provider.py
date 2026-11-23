@@ -8,8 +8,9 @@ else:
 
 from typing import Optional
 
+from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.models import BaseORMModelWithTimes
-from sqlalchemy import Boolean, Enum as SAEnum, Integer, LargeBinary, String
+from sqlalchemy import Boolean, Enum as SAEnum, Integer, LargeBinary, String, select
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..schemas import TokenEndpointAuthMethod
@@ -69,6 +70,12 @@ class LoginProvider(BaseORMModelWithTimes):
         if not self.audiences:
             return []
         return json.loads(self.audiences)
+
+    @classmethod
+    async def get_by_client_id(cls, client_id: str) -> Self | None:
+        session_maker = get_async_session_maker()
+        async with session_maker() as session:
+            return await session.scalar(select(cls).where(cls.client_id == client_id))
 
     @classmethod
     async def get_login_provider_from_iss(cls, iss: str) -> Self:

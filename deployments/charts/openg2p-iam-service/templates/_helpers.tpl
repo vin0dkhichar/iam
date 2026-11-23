@@ -42,6 +42,15 @@ Render Env values section
 {{- include "iamStaffPortalApi.baseEnvVars" (dict "envVars" .Values.envVars "context" $) }}
 {{- end -}}
 
+{{- define "iamAgentUi.envVars" -}}
+{{- include "iamStaffPortalApi.baseEnvVars" (dict "envVars" .Values.envVars "context" $) }}
+{{- end -}}
+
+{{- define "iamPartnerApi.envVars" -}}
+{{- $envVars := merge (deepCopy .Values.envVars) (deepCopy .Values.envVarsFrom) -}}
+{{- include "iamStaffPortalApi.baseEnvVars" (dict "envVars" $envVars "context" $) }}
+{{- end -}}
+
 {{/*
 Agent Portal API helpers.
 

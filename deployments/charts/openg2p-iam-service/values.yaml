@@ -14,7 +14,7 @@ global:
   # Refresh token TTL in Redis. Must match the Keycloak staff realm
   # ssoSessionIdleTimeout (1800) and AUTH_COOKIE_MAX_AGE.
   authRefreshTokenTtlSeconds: 1800
-  # Double-submit CSRF validation on state-changing IAM staff-portal-api requests.
+  # Double-submit CSRF validation on state-changing IAM staff API requests.
   csrfEnabled: true
   # Role permission cache TTL in seconds
   cacheExpireSeconds: 1800
@@ -79,7 +79,7 @@ postgres-init:
 
 iamStaffPortalApi:
   enabled: true
-  nameOverride: iam-staff-portal-api
+  nameOverride: iam-staff-api
   hostname: 'staff-{{ tpl .Values.global.iamHostname $ }}'
   replicaCount: 1
 
@@ -98,7 +98,7 @@ iamStaffPortalApi:
     name: ""
 
   image:
-    repository: openg2p/iam-staff-portal-api
+    repository: openg2p/iam-staff-api
     tag: "1.5.0"
     pullPolicy: Always
 
@@ -200,7 +200,7 @@ iamStaffPortalApi:
     IAM_STAFF_DATA_APPLICATION_URLS__AWE_APPLICATION_URL: '{{ tpl .Values.global.aweApplicationUrl $ }}'
     IAM_STAFF_KEYCLOAK_CLIENT_ID: "iam-staff-ui"
     IAM_STAFF_AUTH_OIDC_CLIENT_ID: "staff-portal"
-    IAM_STAFF_AUTH_PROVIDER_API_URL: 'http://{{ .Release.Name }}-iam-staff-portal-api'
+    IAM_STAFF_AUTH_PROVIDER_API_URL: 'http://{{ .Release.Name }}-iam-staff-api'
     IAM_STAFF_KEYCLOAK_ADMIN_URL: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
     IAM_STAFF_KEYCLOAK_REALM: '{{ .Values.global.keycloakRealm }}'
     IAM_STAFF_DEFAULT_PAGE_SIZE: 20
@@ -307,7 +307,7 @@ iamAgentPortalApi:
   # `optional`. It simply cannot complete a login until the realm and client are
   # provisioned. Set to false for a deployment with no agent audience.
   enabled: true
-  nameOverride: iam-agent-portal-api
+  nameOverride: iam-agent-api
   hostname: 'agent-{{ tpl .Values.global.iamHostname $ }}'
   replicaCount: 1
 
@@ -326,7 +326,7 @@ iamAgentPortalApi:
     name: ""
 
   image:
-    repository: openg2p/iam-agent-portal-api
+    repository: openg2p/iam-agent-api
     tag: "1.5.0"
     pullPolicy: Always
 
@@ -437,11 +437,11 @@ iamAgentPortalApi:
     # (its global.agentKeycloakClientId), or an agent authorised here would be
     # unauthorised there.
     IAM_AGENT_KEYCLOAK_CLIENT_ID: "agent-portal"
-    IAM_AGENT_AUTH_PROVIDER_API_URL: 'http://{{ .Release.Name }}-iam-agent-portal-api'
+    IAM_AGENT_AUTH_PROVIDER_API_URL: 'http://{{ .Release.Name }}-iam-agent-api'
     IAM_AGENT_KEYCLOAK_ADMIN_URL: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
     IAM_AGENT_KEYCLOAK_REALM: '{{ .Values.global.agentKeycloakRealm }}'
     IAM_AGENT_AGENT_REALM: '{{ .Values.global.agentKeycloakRealm }}'
-    IAM_AGENT_AGENT_API_URL: 'http://{{ .Release.Name }}-iam-agent-portal-api'
+    IAM_AGENT_AGENT_API_URL: 'http://{{ .Release.Name }}-iam-agent-api'
     IAM_AGENT_DATA_DIR: '{{ .Values.dataMountPath }}'
     IAM_PROVISION_KEYCLOAK_ADMIN_URL: '{{ tpl .Values.global.keycloakBaseUrl $ }}'
     IAM_PROVISION_KEYCLOAK_ADMIN_CLIENT_ID: iam-provision
@@ -658,7 +658,126 @@ iamStaffUi:
     NODE_ENV: "production"
     BACKEND_API_URL: 'https://{{ tpl .Values.iamStaffPortalApi.hostname $ }}'
     MASTERDATA_API_URL: '{{ tpl .Values.global.masterDataApiUrl $ }}'
-    LOGIN_PROVIDER_ID: "1"
+    LOGIN_PROVIDER_ID: "staff-portal"
     APPLICATION_MNEMONIC: "iam-staff-ui"
     COOKIE_DOMAIN: '{{ tpl .Values.global.authCookieDomain $ }}'
     PAGE_SIZE: "10"
+
+# ---------------------------------------------------------------------------
+# IAM Agent UI — agency admin creates users and assigns roles
+# ---------------------------------------------------------------------------
+iamAgentUi:
+  enabled: true
+  nameOverride: iam-agent-ui
+  hostname: 'iam-agent-ui.{{ .Release.Namespace }}.openg2p.org'
+  replicaCount: 1
+
+  image:
+    repository: openg2p/iam-agent-ui
+    tag: "1.5.0"
+    pullPolicy: Always
+
+  containerPort: 3000
+
+  service:
+    type: ClusterIP
+    port: 80
+
+  istio:
+    enabled: true
+    virtualservice:
+      enabled: true
+      host: '{{ tpl .Values.iamAgentUi.hostname $ }}'
+      gateway: "internal"
+      destination: ""
+      destinationPort: '{{ .Values.iamAgentUi.service.port }}'
+      prefix: /
+      rewriteUri: ""
+
+  envVars:
+    HOSTNAME: "0.0.0.0"
+    PORT: "3000"
+    NODE_ENV: "production"
+    BACKEND_API_URL: 'https://{{ tpl .Values.iamAgentPortalApi.hostname $ }}'
+    LOGIN_PROVIDER_ID: "agency-web"
+    COOKIE_DOMAIN: '{{ tpl .Values.global.authCookieDomain $ }}'
+
+# ---------------------------------------------------------------------------
+# IAM Partner API — signed agency, admin, and policy writes
+# ---------------------------------------------------------------------------
+iamPartnerApi:
+  enabled: true
+  nameOverride: iam-partner-api
+  hostname: 'iam-partner.{{ .Release.Namespace }}.openg2p.org'
+  replicaCount: 1
+  openapiRootPath: /
+
+  image:
+    repository: openg2p/iam-partner-api
+    tag: "1.5.0"
+    pullPolicy: Always
+
+  containerPort: 8000
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  istio:
+    enabled: true
+    virtualservice:
+      enabled: true
+      host: '{{ tpl .Values.iamPartnerApi.hostname $ }}'
+      gateway: "internal"
+      destination: ""
+      destinationPort: '{{ .Values.iamPartnerApi.service.port }}'
+      prefix: /
+      rewriteUri: ""
+
+  envVars:
+    IAM_PARTNER_DB_DRIVER: "postgresql+asyncpg"
+    IAM_PARTNER_DB_HOSTNAME: '{{ .Values.global.postgresqlHost }}'
+    IAM_PARTNER_DB_DBNAME: '{{ tpl .Values.global.iamDB $ }}'
+    IAM_PARTNER_DB_PORT: '{{ .Values.global.iamDBPort }}'
+    IAM_PARTNER_DB_USERNAME: '{{ tpl .Values.global.iamDBUser $ }}'
+    IAM_PARTNER_OPENAPI_ROOT_PATH: '{{ .Values.openapiRootPath }}'
+    IAM_PARTNER_SIGNATURE_VALIDATION_ENABLED: false
+
+  envVarsFrom:
+    IAM_PARTNER_DB_PASSWORD:
+      secretKeyRef:
+        name: '{{ tpl .Values.global.iamDBSecret $ }}'
+        key: '{{ tpl .Values.global.iamDBUserPasswordKey $ }}'
+
+  startupProbe:
+    enabled: true
+    httpGet:
+      path: /ping
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+    successThreshold: 1
+
+  livenessProbe:
+    enabled: true
+    httpGet:
+      path: /ping
+      port: http
+    initialDelaySeconds: 20
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1
+
+  readinessProbe:
+    enabled: true
+    httpGet:
+      path: /ping
+      port: http
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+    successThreshold: 1

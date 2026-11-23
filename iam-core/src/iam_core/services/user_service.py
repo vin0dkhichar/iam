@@ -8,7 +8,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from iam_core.models.enum import ApplicationType, SyncStatus
+from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.user import User
 
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -31,7 +31,8 @@ class UserService:
         first_name: str,
         last_name: str,
         agency_id: str | None = None,
-        is_agency_admin: bool = False,
+        keycloak_clients: list | None = None,
+        sync_action: str = SyncAction.CREATE.value,
     ) -> User:
         if realm not in {item.value for item in ApplicationType}:
             raise BadRequestError(message="realm must be staff, agent, or beneficiary")
@@ -58,7 +59,8 @@ class UserService:
             first_name=first_name.strip(),
             last_name=last_name.strip(),
             agency_id=agency_id,
-            is_agency_admin=is_agency_admin,
+            keycloak_clients=keycloak_clients,
+            sync_action=sync_action,
             sync_status=SyncStatus.PENDING.value,
         )
         session.add(user)
@@ -75,12 +77,3 @@ class UserService:
             .order_by(User.email.asc())
         )
         return list(rows)
-
-    async def agency_admin(self, session: AsyncSession, agency_id: str) -> User | None:
-        return await session.scalar(
-            select(User).where(
-                User.realm == ApplicationType.AGENT.value,
-                User.agency_id == agency_id,
-                User.is_agency_admin == True,  # noqa: E712
-            )
-        )
