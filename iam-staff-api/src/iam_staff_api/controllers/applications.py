@@ -75,7 +75,13 @@ class ApplicationsController(BaseController):
             )
             applications: list[ApplicationData]
             total: int
-            applications, total = await self.applications_service.get_applications(page, page_size)
+            application_type = None
+            payload = get_request.request_body.request_payload
+            if payload is not None:
+                application_type = payload.application_type
+            applications, total = await self.applications_service.get_applications(
+                page, page_size, application_type
+            )
             return self.helper.construct_payload_response(
                 get_request,
                 applications,

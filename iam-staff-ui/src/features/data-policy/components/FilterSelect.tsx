@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
+import CustomDropdown from './CustomDropdown';
 
 type Option = {
     label: string;
@@ -26,31 +26,16 @@ export default function FilterSelect({
     placeholder,
     className = '',
 }: FilterSelectProps) {
-    const isDisabled = disabled || loading;
-
     return (
-        <div className={`relative w-full ${className}`}>
-            <select
+        <div className={className}>
+            <CustomDropdown
+                options={options}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
-                disabled={isDisabled}
-                className="w-full appearance-none border border-[#ED7C22] rounded-[10px] bg-[#FFFFFF] py-2 pl-4 pr-9 text-[16px] text-[#000000] outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus:border-[#ED7C22] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-                {placeholder && !value && (
-                    <option value="" disabled>
-                        {loading ? 'Loading...' : placeholder}
-                    </option>
-                )}
-                {options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
-            <ChevronDown
-                size={18}
-                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#000000]/50"
-                aria-hidden
+                onChange={onChange}
+                disabled={disabled}
+                loading={loading}
+                placeholder={placeholder}
+                inline
             />
         </div>
     );

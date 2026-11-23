@@ -11,6 +11,7 @@ import {
   TextAreaField,
 } from "@/components";
 import { Application, ApplicationForm } from "@/features/application/types";
+import { statusLabel } from "@/shared/utils/statusLabel";
 
 interface ApplicationTabProps {
   app: Application;
@@ -30,28 +31,70 @@ export default function ApplicationTab({
   const t = useTranslations();
   const { can } = useRbac();
   const isSelfRegistered = app.is_self_registered ?? false;
+  const isAgent = app.application_type === "agent";
   const isDisabled = isSelfRegistered || !can("application:edit") || saving;
 
   return (
     <Card>
       <form onSubmit={saveApplication}>
         <div className="grid grid-cols-2 gap-4">
+          {isAgent ? (
+            <>
+              <InputField
+                label={t("agencyId")}
+                value={app.application_mnemonic}
+                onChange={() => {}}
+                disabled
+              />
+              <InputField
+                label={t("agencyName")}
+                value={appForm.application_description}
+                onChange={(value) =>
+                  setAppForm((f: typeof appForm) => ({
+                    ...f,
+                    application_description: value,
+                  }))
+                }
+                disabled={isDisabled}
+              />
+              <InputField
+                label={t("clientStatus")}
+                value={statusLabel(t, app.client_status)}
+                onChange={() => {}}
+                disabled
+              />
+              <InputField
+                label={t("groupStatus")}
+                value={statusLabel(t, app.group_status)}
+                onChange={() => {}}
+                disabled
+              />
+            </>
+          ) : (
+            <>
           <InputField
-            label="Mnemonic"
+            label={t("mnemonic")}
             value={app.application_mnemonic}
             onChange={() => {}}
             disabled
           />
 
           <InputField
-            label="Self-registered"
-            value={isSelfRegistered ? "Yes" : "No"}
+            label={t("selfRegistered")}
+            value={isSelfRegistered ? t("yes") : t("no")}
+            onChange={() => {}}
+            disabled
+          />
+
+          <InputField
+            label={t("clientStatus")}
+            value={statusLabel(t, app.client_status)}
             onChange={() => {}}
             disabled
           />
 
           <TextAreaField
-            label="Description"
+            label={t("description")}
             value={appForm.application_description}
             onChange={(value) =>
               setAppForm((f: typeof appForm) => ({
@@ -64,8 +107,10 @@ export default function ApplicationTab({
             className="col-span-full"
           />
 
+          {!isAgent && (
+          <>
           <InputField
-            label="URL"
+            label={t("url")}
             value={appForm.application_url}
             onChange={(value) =>
               setAppForm((f: typeof appForm) => ({
@@ -131,6 +176,10 @@ export default function ApplicationTab({
               }
             />
           </div>
+          </>
+          )}
+            </>
+          )}
         </div>
         {!isSelfRegistered && (
           <FormActions>

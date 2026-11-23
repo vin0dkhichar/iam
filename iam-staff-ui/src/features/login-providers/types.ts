@@ -1,5 +1,6 @@
 export interface LoginProvider {
   id: number;
+  application_type?: string | null;
   provider_name: string;
   description?: string | null;
   icon_base64?: string | null;
@@ -28,6 +29,7 @@ export interface LoginProvider {
 }
 
 export interface LoginProviderForm {
+  application_type: string;
   provider_name: string;
   description: string;
   client_id: string;

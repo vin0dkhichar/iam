@@ -136,13 +136,31 @@ class DataPolicyController(BaseController):
                 payload.application_id,
             )
 
-            # Add DP_ prefix if not already present for IAM application policies
-            mnemonic = payload.policy_mnemonic
-            if payload.application_id is not None and not mnemonic.startswith("DP_"):
-                mnemonic = f"DP_{mnemonic}"
-
             session_maker = get_async_session_maker()
             async with session_maker() as session:
+                mnemonic = payload.policy_mnemonic
+                if payload.application_id is not None:
+                    from iam_core.models.application import Application
+                    from iam_core.models.enum import ApplicationType
+                    from iam_core.user_auth.helpers.data_policy_role_helper import (
+                        AGC_ROLE_PREFIX,
+                        DP_ROLE_PREFIX,
+                    )
+
+                    application = await session.get(Application, payload.application_id)
+                    if application is None:
+                        raise BadRequestError(message="Application not found")
+                    prefix = (
+                        AGC_ROLE_PREFIX
+                        if application.application_type == ApplicationType.AGENT.value
+                        else DP_ROLE_PREFIX
+                    )
+                    bare = mnemonic
+                    for known in (DP_ROLE_PREFIX, AGC_ROLE_PREFIX):
+                        if bare.startswith(known):
+                            bare = bare[len(known) :]
+                    mnemonic = f"{prefix}{bare}"
+
                 policy = await self._service.add_policy(
                     policy_mnemonic=mnemonic,
                     policy_description=payload.policy_description,
@@ -173,6 +191,7 @@ class DataPolicyController(BaseController):
                                 role_mnemonic=mnemonic,
                                 role_description=payload.policy_description,
                                 sync_status=SyncStatus.PENDING.value,
+                                active=True,
                             )
                         )
 
@@ -204,28 +223,36 @@ class DataPolicyController(BaseController):
                 if not policy:
                     raise BadRequestError(message=f"Data policy not found: {payload.policy_id}")
 
-                # Sync to Keycloak for IAM application policies
-                if policy.application_id is not None:
-                    auth_token = bearer_from_request(http_request) or ""
-                    if auth_token:
-                        try:
-                            from iam_core.models import Application
-
-                            app = await session.get(Application, policy.application_id)
-                            if app:
-                                kc_helper = KeycloakHelper(auth_token)
-                                await kc_helper.delete_role(policy.policy_mnemonic, app.application_mnemonic)
-                                _logger.info(
-                                    f"Deleted Keycloak role '{policy.policy_mnemonic}' from client '{app.application_mnemonic}'"
-                                )
-                        except Exception as e:
-                            _logger.warning("Failed to delete data policy from Keycloak: %s", e)
-                            # Continue with DB deletion even if Keycloak sync fails
-
-                deleted_id, policy_mnemonic, should_delete_role = await self._service.remove_policy(
+                application_id = policy.application_id
+                policy_mnemonic = policy.policy_mnemonic
+                deleted_id, _, should_delete_role = await self._service.remove_policy(
                     policy_id=payload.policy_id,
                     session=session,
                 )
+                if should_delete_role and application_id is not None:
+                    from sqlalchemy import select
+
+                    from iam_core.models import Application, Role
+                    from iam_core.models.enum import SyncStatus
+
+                    role = await session.scalar(
+                        select(Role).where(
+                            Role.application_id == application_id,
+                            Role.role_mnemonic == policy_mnemonic,
+                        )
+                    )
+                    if role is not None and role.sync_status == SyncStatus.SYNCED.value:
+                        auth_token = bearer_from_request(http_request) or ""
+                        application = await session.get(Application, application_id)
+                        if auth_token and application is not None:
+                            try:
+                                await KeycloakHelper(auth_token).delete_role(
+                                    policy_mnemonic, application.application_mnemonic
+                                )
+                            except Exception as exc:
+                                _logger.warning("Failed to delete data policy role from Keycloak: %s", exc)
+                    if role is not None:
+                        await session.delete(role)
                 await session.commit()
             return self.helper.construct_payload_response(
                 request,

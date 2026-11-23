@@ -9,12 +9,17 @@ export function authHeaders(req: NextRequest): Record<string, string> | NextResp
   if (!accessToken) {
     return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   }
-  return {
+  const headers: Record<string, string> = {
     accept: "application/json",
     "Content-Type": "application/json",
     Authorization: `Bearer ${accessToken}`,
     Cookie: req.headers.get("cookie") ?? "",
   };
+  const csrfToken = req.cookies.get("X-CSRF-Token")?.value;
+  if (csrfToken) {
+    headers["X-CSRF-Token"] = csrfToken;
+  }
+  return headers;
 }
 
 function rewriteSetCookieDomain(cookie: string, domain: string): string {

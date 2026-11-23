@@ -17,6 +17,11 @@ const NAV = [
     action: APPLICATION_ACTIONS.view,
   },
   {
+    href: "/agencies",
+    labelKey: "navAgencies" as const,
+    action: APPLICATION_ACTIONS.view,
+  },
+  {
     href: "/login-providers",
     labelKey: "navLoginProviders" as const,
     action: LOGIN_PROVIDER_ACTIONS.view,

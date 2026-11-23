@@ -8,8 +8,8 @@ import {
   TextAreaField,
   Button,
 } from "@/components";
-
 interface ApplicationForm {
+  application_type: string;
   application_mnemonic: string;
   application_description: string;
   application_url: string;
@@ -29,6 +29,7 @@ interface ApplicationModalProps {
 }
 
 const emptyForm: ApplicationForm = {
+  application_type: "staff",
   application_mnemonic: "",
   application_description: "",
   application_url: "",
@@ -47,61 +48,67 @@ export default function ApplicationModal({
   saving,
 }: ApplicationModalProps) {
   const t = useTranslations();
+  const isAgent = form.application_type === "agent";
 
   return (
-    <Modal title={t("addApplication")} onClose={onClose}>
+    <Modal title={isAgent ? t("addAgency") : t("addApplication")} onClose={onClose}>
       <form onSubmit={onSave}>
         <div className="grid grid-cols-2 gap-4">
           <InputField
-            label={t("mnemonic")}
+            label={isAgent ? t("agencyId") : t("mnemonic")}
             value={form.application_mnemonic}
             onChange={(value) => onChange("application_mnemonic", value)}
             className="col-span-full"
             required
           />
           <TextAreaField
-            label={t("description")}
+            label={isAgent ? t("agencyName") : t("description")}
             value={form.application_description}
             onChange={(value) => onChange("application_description", value)}
             className="col-span-full"
             rows={1}
+            required={isAgent}
           />
-          <InputField
-            label={t("url")}
-            value={form.application_url}
-            onChange={(value) => onChange("application_url", value)}
-            className="col-span-full"
-          />
-          <InputField
-            label={t("apiUrl")}
-            value={form.api_url}
-            onChange={(value) => onChange("api_url", value)}
-            className="col-span-full"
-          />
-          <InputField
-            label={t("order")}
-            type="number"
-            value={form.order}
-            onChange={(value) => onChange("order", value)}
-          />
-          <InputField
-            label={t("width")}
-            type="number"
-            value={form.width}
-            onChange={(value) => onChange("width", value)}
-          />
-          <IconBase64Field
-            value={form.icon_base64}
-            mimeType={form.icon_mime_type}
-            onChange={(base64, mimeType) => {
-              onChange("icon_base64", base64);
-              onChange("icon_mime_type", mimeType);
-            }}
-            onClear={() => {
-              onChange("icon_base64", "");
-              onChange("icon_mime_type", "image/png");
-            }}
-          />
+          {!isAgent && (
+            <>
+              <InputField
+                label={t("url")}
+                value={form.application_url}
+                onChange={(value) => onChange("application_url", value)}
+                className="col-span-full"
+              />
+              <InputField
+                label={t("apiUrl")}
+                value={form.api_url}
+                onChange={(value) => onChange("api_url", value)}
+                className="col-span-full"
+              />
+              <InputField
+                label={t("order")}
+                type="number"
+                value={form.order}
+                onChange={(value) => onChange("order", value)}
+              />
+              <InputField
+                label={t("width")}
+                type="number"
+                value={form.width}
+                onChange={(value) => onChange("width", value)}
+              />
+              <IconBase64Field
+                value={form.icon_base64}
+                mimeType={form.icon_mime_type}
+                onChange={(base64, mimeType) => {
+                  onChange("icon_base64", base64);
+                  onChange("icon_mime_type", mimeType);
+                }}
+                onClear={() => {
+                  onChange("icon_base64", "");
+                  onChange("icon_mime_type", "image/png");
+                }}
+              />
+            </>
+          )}
         </div>
         <div className="flex gap-3 justify-end mt-5">
           <Button type="button" variant="secondary" onClick={onClose}>

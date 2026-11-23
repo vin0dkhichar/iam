@@ -62,6 +62,7 @@ class UserService:
             keycloak_clients=keycloak_clients,
             sync_action=sync_action,
             sync_status=SyncStatus.PENDING.value,
+            active=True,
         )
         session.add(user)
         await session.flush()

@@ -5,6 +5,7 @@ interface LoginProvider {
   provider_name: string;
   description?: string | null;
   client_id: string;
+  application_type?: string | null;
   issuer: string;
   active?: boolean;
   token_endpoint_auth_method?: string;
@@ -24,6 +25,11 @@ export function getLoginProviderColumns({
       key: "name",
       header: t("name"),
       render: (lp: LoginProvider) => lp.provider_name,
+    },
+    {
+      key: "applicationType",
+      header: t("applicationType"),
+      render: (lp: LoginProvider) => lp.application_type || "—",
     },
     {
       key: "clientId",

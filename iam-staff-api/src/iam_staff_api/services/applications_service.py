@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 from ..helpers.query_helper import dt_iso, paginate
 from ..helpers.keycloak_helper import KeycloakHelper
 from iam_core.models import Application
-from iam_core.models.enum import SyncStatus
+from iam_core.models.enum import ApplicationType, SyncStatus
 from ..schemas import (
     ApplicationCreatePayload,
     ApplicationData,
@@ -30,15 +30,24 @@ class ApplicationsService(BaseService):
             width=app.width,
             order=app.order,
             is_self_registered=bool(app.is_self_registered),
+            client_status=app.client_status,
+            client_error=app.client_error,
+            group_status=app.group_status,
+            group_error=app.group_error,
             active=bool(app.active),
             created_at=dt_iso(app.created_at),
             updated_at=dt_iso(app.updated_at),
         )
 
-    async def get_applications(self, page: int, page_size: int) -> tuple[list[ApplicationData], int]:
+    async def get_applications(
+        self, page: int, page_size: int, application_type: str | None = None
+    ) -> tuple[list[ApplicationData], int]:
         async_session = get_async_session_maker()
         async with async_session() as session:
-            stmt = select(Application).order_by(
+            stmt = select(Application).where(
+                Application.application_type == (application_type or ApplicationType.STAFF.value)
+            )
+            stmt = stmt.order_by(
                 Application.created_at.desc().nullslast(),
                 Application.id.desc(),
             )
@@ -57,6 +66,10 @@ class ApplicationsService(BaseService):
         mnemonic = payload.application_mnemonic.strip()
         if not mnemonic:
             raise BadRequestError(message="application_mnemonic is required")
+        application_type = (payload.application_type or ApplicationType.STAFF.value).strip()
+        if application_type not in {ApplicationType.STAFF.value, ApplicationType.AGENT.value}:
+            raise BadRequestError(message="application_type must be staff or agent")
+        is_agent = application_type == ApplicationType.AGENT.value
 
         async_session = get_async_session_maker()
         async with async_session() as session:
@@ -74,15 +87,17 @@ class ApplicationsService(BaseService):
 
             app = Application(
                 application_mnemonic=mnemonic,
+                application_type=application_type,
                 application_description=payload.application_description,
                 application_url=payload.application_url,
                 api_url=payload.api_url,
                 icon_base64=payload.icon_base64,
                 order=payload.order,
                 width=payload.width,
-                is_self_registered=False,
+                is_self_registered=is_agent,
                 active=True,
                 client_status=SyncStatus.PENDING.value,
+                group_status=SyncStatus.PENDING.value if is_agent else SyncStatus.SYNCED.value,
             )
             session.add(app)
             await session.commit()

@@ -101,6 +101,10 @@ class ApplicationData(BaseModel):
     width: Optional[int] = None
     order: Optional[int] = None
     is_self_registered: bool = False
+    client_status: str = "synced"
+    client_error: Optional[str] = None
+    group_status: str = "synced"
+    group_error: Optional[str] = None
     active: bool = True
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -108,6 +112,7 @@ class ApplicationData(BaseModel):
 
 class ApplicationCreatePayload(BaseModel):
     application_mnemonic: str
+    application_type: str = "staff"
     application_description: Optional[str] = None
     application_url: Optional[str] = None
     api_url: Optional[str] = None
@@ -143,6 +148,8 @@ class RoleData(BaseModel):
     role_mnemonic: str
     role_description: Optional[str] = None
     application_id: int
+    sync_status: str = "synced"
+    sync_error: Optional[str] = None
     active: bool = True
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -231,6 +238,7 @@ class DataPolicyDeletePayload(BaseModel):
 
 class LoginProviderData(BaseModel):
     id: int
+    application_type: str = "staff"
     provider_name: str
     description: Optional[str] = None
     icon_base64: Optional[str] = None
@@ -260,6 +268,7 @@ class LoginProviderData(BaseModel):
 
 
 class LoginProviderCreatePayload(BaseModel):
+    application_type: str = "staff"
     provider_name: str
     description: Optional[str] = None
     icon_base64: Optional[str] = None
@@ -285,6 +294,7 @@ class LoginProviderCreatePayload(BaseModel):
 
 class LoginProviderUpdatePayload(BaseModel):
     id: int
+    application_type: Optional[str] = None
     provider_name: Optional[str] = None
     description: Optional[str] = None
     icon_base64: Optional[str] = None
@@ -341,8 +351,12 @@ class ApplicationResponse(G2PResponse):
     response_body: Optional[ApplicationResponseBody] = None
 
 
+class ApplicationsListPayload(BaseModel):
+    application_type: Optional[str] = None
+
+
 class GetApplicationsRequestBody(G2PRequestBody):
-    request_payload: Optional[EmptyRequestPayload] = None
+    request_payload: Optional[ApplicationsListPayload] = None
 
 
 class GetApplicationsRequest(G2PRequest):
@@ -619,6 +633,23 @@ class CreateAgencyAdminBody(BaseModel):
 class AssignPoliciesBody(BaseModel):
     user_id: str
     policy_mnemonics: list[str]
+
+
+class AgencyUsersBody(BaseModel):
+    agency_id: str
+
+
+class AgencyUserItem(BaseModel):
+    id: str
+    email: str
+    first_name: str
+    last_name: str
+    sync_status: str
+    enabled: str
+
+
+class AgencyUsersResponse(BaseModel):
+    items: list[AgencyUserItem]
 
 
 class CreateAgencyAdminResponse(BaseModel):

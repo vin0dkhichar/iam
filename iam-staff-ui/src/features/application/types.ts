@@ -10,6 +10,10 @@ export interface Application {
   order?: number | null;
   width?: number | null;
   is_self_registered?: boolean;
+  client_status?: string | null;
+  client_error?: string | null;
+  group_status?: string | null;
+  group_error?: string | null;
   active?: boolean;
 }
 
@@ -17,6 +21,8 @@ export interface Role {
   id: number;
   role_mnemonic: string;
   role_description?: string | null;
+  sync_status?: string | null;
+  sync_error?: string | null;
   active?: boolean;
 }
 
@@ -51,7 +57,8 @@ export type TabId =
   | "roles"
   | "permissions"
   | "role-permissions"
-  | "data-policies";
+  | "data-policies"
+  | "users";
 
 export interface TabDefinition {
   id: TabId;

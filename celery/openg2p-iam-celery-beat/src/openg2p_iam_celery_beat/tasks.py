@@ -14,6 +14,15 @@ from .app import celery_app
 from .config import Settings
 
 _config = Settings.get_config()
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _run(coro):
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    return _loop.run_until_complete(coro)
 
 
 async def queue_pending() -> None:
@@ -79,4 +88,4 @@ async def queue_pending() -> None:
 
 @celery_app.task(name="iam.provision_users_beat")
 def provision_users_beat() -> None:
-    asyncio.run(queue_pending())
+    _run(queue_pending())

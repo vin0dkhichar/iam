@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useTranslations } from "next-intl";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { toast } from "react-toastify";
 import { AddButton, ConfirmModal, Card } from "@/components";
 import Table from "@/components/Table";
@@ -37,6 +37,7 @@ export default function DataPoliciesTab({
   const { pageSize } = useConfig();
   const { execute } = useFetch();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const router = useRouter();
 
   const urlPolicyTarget = searchParams.get('policyTarget') || 'REGISTER_RECORD';
@@ -90,7 +91,7 @@ export default function DataPoliciesTab({
   const isRegisterTarget = selectedPolicyTarget === 'REGISTER_RECORD';
   const canListPolicies = selectedPolicyTarget === 'ATTRIBUTE' || selectedPolicyTarget === 'GEO' || !!selectedRegisterId;
 
-  const { policies, pagination, loading, refresh } = usePolicies(
+  const { policies, pagination, loading, error: policiesError, refresh } = usePolicies(
     selectedRegisterId,
     selectedPolicyTarget,
     applicationId,
@@ -119,6 +120,12 @@ export default function DataPoliciesTab({
       refresh();
     }
   }, [page, selectedRegisterId, selectedPolicyTarget, isActive, refresh]);
+
+  useEffect(() => {
+    if (policiesError) {
+      toast.error(typeof policiesError === "string" ? policiesError : "Failed to load data policies");
+    }
+  }, [policiesError]);
 
   function openDelete(title: string, warningText: string, onConfirm: () => Promise<void>) {
     setConfirm({ open: true, title, warningText, message: "", onConfirm });
@@ -207,7 +214,10 @@ export default function DataPoliciesTab({
               </>
             )}
             <AddButton
-              onClick={() => router.push(`/applications/${applicationId}/data-policies/create?policyTarget=${selectedPolicyTarget}${selectedRegisterId ? `&registerId=${selectedRegisterId}` : ''}`)}
+              onClick={() => {
+                const section = pathname.includes("/agencies/") ? "agencies" : "applications";
+                router.push(`/${section}/${applicationId}/data-policies/create?policyTarget=${selectedPolicyTarget}${selectedRegisterId ? `&registerId=${selectedRegisterId}` : ""}`);
+              }}
               disabled={!canListPolicies}
             />
           </div>

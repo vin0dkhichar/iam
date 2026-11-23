@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "react-toastify";
 import { useFetch } from "@/shared/hooks/useFetch";
 import { LoginProvider, LoginProviderForm } from "../types";
 
@@ -10,6 +11,7 @@ export function useLoginProviderData(providerId: number) {
   const [error, setError] = useState<string | null>(null);
   const loadSeq = useRef(0);
   const [form, setForm] = useState<LoginProviderForm>({
+    application_type: "staff",
     provider_name: "",
     description: "",
     client_id: "",
@@ -53,11 +55,13 @@ export function useLoginProviderData(providerId: number) {
 
       if (data?.error) {
         setError(data.error);
+        toast.error(data.error);
         setProvider(null);
         return;
       }
       setProvider(data);
       setForm({
+        application_type: data?.application_type || "staff",
         provider_name: data?.provider_name || "",
         description: data?.description || "",
         client_id: data?.client_id || "",
@@ -86,7 +90,9 @@ export function useLoginProviderData(providerId: number) {
       });
     } catch (e) {
       if (seq !== loadSeq.current) return;
-      setError(e instanceof Error ? e.message : "Failed to load");
+      const errorMessage = e instanceof Error ? e.message : "Failed to load";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       if (seq === loadSeq.current) {
         setLoading(false);
@@ -101,6 +107,7 @@ export function useLoginProviderData(providerId: number) {
       try {
         const payload: Record<string, unknown> = {
           id: providerId,
+          application_type: currentForm.application_type || "staff",
           provider_name: currentForm.provider_name.trim(),
           description: currentForm.description || null,
           client_id: currentForm.client_id.trim(),
@@ -137,13 +144,16 @@ export function useLoginProviderData(providerId: number) {
         });
         if (res?.error) {
           setError(res.error);
+          toast.error(res.error);
           return;
         }
         setProvider(res);
         setForm((f) => ({ ...f, client_secret: "", client_private_key: "" }));
         return res;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Save failed");
+        const errorMessage = err instanceof Error ? err.message : "Save failed";
+        setError(errorMessage);
+        toast.error(errorMessage);
         return null;
       } finally {
         setSaving(false);

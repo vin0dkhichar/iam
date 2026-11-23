@@ -3,6 +3,7 @@ export { default as ApplicationNotFound } from "./ApplicationNotFound";
 export { default as ApplicationsPageClient } from "./ApplicationsPageClient";
 export { default as ApplicationTab } from "./ApplicationTab";
 export { default as DataPoliciesTab } from "./DataPoliciesTab";
+export { default as AgencyUsersTab } from "./AgencyUsersTab";
 export { default as FormModal } from "./FormModal";
 export { default as PermissionsTab } from "./PermissionsTab";
 export { default as RolePermissionsTab } from "./RolePermissionsTab";

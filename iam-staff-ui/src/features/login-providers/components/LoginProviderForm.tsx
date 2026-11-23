@@ -35,6 +35,18 @@ export default function LoginProviderForm({
   return (
     <form onSubmit={onSave}>
       <div className="grid grid-cols-2 gap-4">
+        <SelectField
+          label={t("applicationType")}
+          value={form.application_type}
+          onChange={(value) => onChange("application_type", value)}
+          options={[
+            { value: "staff", label: "staff" },
+            { value: "agent", label: "agent" },
+            { value: "beneficiary", label: "beneficiary" },
+          ]}
+          disabled={!canEdit || saving}
+          required
+        />
         <InputField
           label="Provider name"
           value={form.provider_name}

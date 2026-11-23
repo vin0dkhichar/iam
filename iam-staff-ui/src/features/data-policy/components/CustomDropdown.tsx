@@ -20,6 +20,9 @@ interface CustomDropdownProps {
     searchable?: boolean;
     menuMaxHeight?: number;
     inline?: boolean;
+    multiple?: boolean;
+    values?: string[];
+    onValuesChange?: (values: string[]) => void;
 }
 
 type MenuPosition = {
@@ -31,7 +34,10 @@ type MenuPosition = {
     placement: 'bottom' | 'top';
 };
 
-const DEFAULT_MENU_MAX_HEIGHT = 220;
+const VISIBLE_ROWS = 10;
+const OPTION_ROW_HEIGHT = 40;
+const LIST_MAX_HEIGHT = VISIBLE_ROWS * OPTION_ROW_HEIGHT;
+const DEFAULT_MENU_MAX_HEIGHT = LIST_MAX_HEIGHT + 56;
 const SEARCH_THRESHOLD = 8;
 
 export default function CustomDropdown({
@@ -45,6 +51,9 @@ export default function CustomDropdown({
     searchable,
     menuMaxHeight = DEFAULT_MENU_MAX_HEIGHT,
     inline = false,
+    multiple = false,
+    values,
+    onValuesChange,
 }: CustomDropdownProps) {
     const [open, setOpen] = useState(false);
     const [selected, setSelected] = useState<string | undefined>(value);
@@ -144,12 +153,28 @@ export default function CustomDropdown({
         );
     }, [options, search, showSearch]);
 
+    const selectedValues = values ?? [];
+
     const handleSelect = (val: string) => {
+        if (multiple) {
+            const next = selectedValues.includes(val)
+                ? selectedValues.filter((item) => item !== val)
+                : [...selectedValues, val];
+            onValuesChange?.(next);
+            return;
+        }
         setSelected(val);
         setOpen(false);
         setSearch('');
         onChange?.(val);
     };
+
+    const selectedLabels = multiple
+        ? options
+              .filter((opt) => selectedValues.includes(opt.value))
+              .map((opt) => opt.label)
+              .join(', ')
+        : '';
 
     const handleToggle = () => {
         if (disabled) return;
@@ -184,7 +209,10 @@ export default function CustomDropdown({
                         />
                     </div>
                 )}
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain py-1">
+                <div
+                    className="min-h-0 overflow-y-auto overscroll-contain py-1"
+                    style={{ maxHeight: LIST_MAX_HEIGHT }}
+                >
                     {loading ? (
                         <div className="px-4 py-2 text-[16px]">Loading...</div>
                     ) : filteredOptions.length === 0 ? (
@@ -196,10 +224,10 @@ export default function CustomDropdown({
                             <div
                                 key={opt.value}
                                 role="option"
-                                aria-selected={opt.value === selected}
+                                aria-selected={multiple ? selectedValues.includes(opt.value) : opt.value === selected}
                                 onClick={() => handleSelect(opt.value)}
-                                className={`px-4 py-2 text-[16px] cursor-pointer truncate hover:bg-[#F3F1E4] ${
-                                    opt.value === selected
+                                className={`px-4 py-2 text-[16px] leading-6 cursor-pointer truncate hover:bg-[#F3F1E4] ${
+                                    (multiple ? selectedValues.includes(opt.value) : opt.value === selected)
                                         ? 'bg-[#F3F1E4]/70 font-medium'
                                         : ''
                                 }`}
@@ -237,12 +265,16 @@ export default function CustomDropdown({
                         title={
                             loading
                                 ? 'Loading...'
-                                : selectedItem?.label || placeholder
+                                : multiple
+                                  ? selectedLabels || placeholder
+                                  : selectedItem?.label || placeholder
                         }
                     >
                         {loading
                             ? 'Loading...'
-                            : selectedItem?.label || placeholder}
+                            : multiple
+                              ? selectedLabels || placeholder
+                              : selectedItem?.label || placeholder}
                     </span>
 
                     <Image

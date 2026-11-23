@@ -5,6 +5,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError, NotFo
 from openg2p_fastapi_common.service import BaseService
 from sqlalchemy import select
 from iam_core.models import LoginProvider
+from iam_core.models.enum import ApplicationType
 
 from ..helpers.query_helper import dt_iso, paginate
 from ..schemas import (
@@ -25,6 +26,7 @@ class LoginProvidersService(BaseService):
     def _to_data(self, provider: LoginProvider) -> LoginProviderData:
         return LoginProviderData(
             id=provider.id,
+            application_type=provider.application_type,
             provider_name=provider.provider_name,
             description=provider.description,
             icon_base64=provider.icon_base64,
@@ -69,6 +71,9 @@ class LoginProvidersService(BaseService):
             return self._to_data(provider)
 
     async def create_login_provider(self, payload: LoginProviderCreatePayload) -> LoginProviderData:
+        application_type = (payload.application_type or ApplicationType.STAFF.value).strip()
+        if application_type not in {item.value for item in ApplicationType}:
+            raise BadRequestError(message="application_type must be staff, agent, or beneficiary")
         if not payload.provider_name.strip():
             raise BadRequestError(message="provider_name is required")
         if not payload.client_id.strip():
@@ -81,6 +86,7 @@ class LoginProvidersService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             provider = LoginProvider(
+                application_type=application_type,
                 provider_name=payload.provider_name.strip(),
                 description=payload.description,
                 icon_base64=payload.icon_base64,
@@ -117,6 +123,7 @@ class LoginProvidersService(BaseService):
                 raise NotFoundError(message="Login provider not found")
 
             for field in (
+                "application_type",
                 "provider_name",
                 "description",
                 "icon_base64",

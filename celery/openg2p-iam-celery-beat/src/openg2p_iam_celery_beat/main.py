@@ -1,4 +1,4 @@
-from .app import Initializer
+from .app import Initializer, celery_app
 
 initializer = Initializer()
 initializer.initialize()

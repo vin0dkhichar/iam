@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { useRouter } from "@/i18n/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
 import { AddButton, Button, FormActions, InputField, Modal, Tabs } from "@/components";
 import { toast } from "react-toastify";
@@ -13,6 +13,7 @@ import {
   PERMISSION_ACTIONS,
   ROLE_ACTIONS,
   ROLE_PERMISSION_ACTIONS,
+  USER_ACTIONS,
 } from "@/shared/permissions/actions";
 
 import { useApplicationData } from "@/features/application/hooks/useApplicationData";
@@ -24,6 +25,7 @@ import {
   PermissionsTab,
   RolePermissionsTab,
   DataPoliciesTab,
+  AgencyUsersTab,
 } from "@/features/application/components";
 import {
   TabId,
@@ -49,6 +51,7 @@ const TAB_DEFINITIONS: TabDefinition[] = [
 export default function ApplicationDetailPage() {
   const t = useTranslations();
   const { can } = useRbac();
+  const pathname = usePathname();
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -68,6 +71,7 @@ export default function ApplicationDetailPage() {
   } = useApplicationData(applicationId);
 
   // Tab state from URL
+  const [usersRefresh, setUsersRefresh] = useState(0);
   const [adminOpen, setAdminOpen] = useState(false);
   const [adminSaving, setAdminSaving] = useState(false);
   const [adminForm, setAdminForm] = useState({ first_name: "", last_name: "", email: "" });
@@ -101,10 +105,21 @@ export default function ApplicationDetailPage() {
   }, [applicationId]);
 
   // Filter visible tabs based on permissions
-  const visibleTabs = TAB_DEFINITIONS.filter((item) => can(item.action)).map((item) => ({
-    ...item,
-    label: t(item.label),
-  }));
+  const isAgent = app?.application_type === "agent";
+  const visibleTabs = (
+    isAgent
+      ? [
+          { id: "application" as TabId, label: "tabAgency", action: APPLICATION_ACTIONS.view },
+          { id: "users" as TabId, label: "tabUsers", action: APPLICATION_ACTIONS.view },
+          ...TAB_DEFINITIONS.slice(1),
+        ]
+      : TAB_DEFINITIONS
+  )
+    .filter((item) => can(item.action))
+    .map((item) => ({
+      ...item,
+      label: t(item.label),
+    }));
 
   // Sync tab state with URL changes
   useEffect(() => {
@@ -130,14 +145,14 @@ export default function ApplicationDetailPage() {
   }
 
   if (!app) {
-    return <ApplicationNotFound backHref="/applications" />;
+    return <ApplicationNotFound backHref={pathname.startsWith("/agencies") ? "/agencies" : "/applications"} />;
   }
 
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-3">
         <h1 className="text-[24px] font-bold text-black mb-4">{app.application_mnemonic}</h1>
-        {app.application_type === "agent" && (
+        {app.application_type === "agent" && can(USER_ACTIONS.create) && (
           <AddButton label={t("addAdmin")} onClick={() => setAdminOpen(true)} />
         )}
       </div>
@@ -163,6 +178,7 @@ export default function ApplicationDetailPage() {
                 }
                 setAdminOpen(false);
                 setAdminForm({ first_name: "", last_name: "", email: "" });
+                setUsersRefresh((value) => value + 1);
                 toast.success(t("adminCreated"));
               } finally {
                 setAdminSaving(false);
@@ -170,9 +186,9 @@ export default function ApplicationDetailPage() {
             }}
           >
             <div className="grid gap-4">
-              <InputField label="First name" value={adminForm.first_name} onChange={(value) => setAdminForm((form) => ({ ...form, first_name: value }))} required />
-              <InputField label="Last name" value={adminForm.last_name} onChange={(value) => setAdminForm((form) => ({ ...form, last_name: value }))} required />
-              <InputField label="Email" type="email" value={adminForm.email} onChange={(value) => setAdminForm((form) => ({ ...form, email: value }))} required />
+              <InputField label={t("firstName")} value={adminForm.first_name} onChange={(value) => setAdminForm((form) => ({ ...form, first_name: value }))} required />
+              <InputField label={t("lastName")} value={adminForm.last_name} onChange={(value) => setAdminForm((form) => ({ ...form, last_name: value }))} required />
+              <InputField label={t("email")} type="email" value={adminForm.email} onChange={(value) => setAdminForm((form) => ({ ...form, email: value }))} required />
             </div>
             <FormActions>
               <Button type="button" onClick={() => setAdminOpen(false)}>{t("cancel")}</Button>
@@ -215,6 +231,12 @@ export default function ApplicationDetailPage() {
       <div style={{ display: tab === "role-permissions" ? "block" : "none" }}>
         <RolePermissionsTab applicationId={applicationId} isActive={tab === "role-permissions"} />
       </div>
+
+      {isAgent && (
+        <div style={{ display: tab === "users" ? "block" : "none" }}>
+          <AgencyUsersTab agencyId={app.application_mnemonic} refreshKey={usersRefresh} />
+        </div>
+      )}
 
       <div style={{ display: tab === "data-policies" ? "block" : "none" }}>
         <DataPoliciesTab

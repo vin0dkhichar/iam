@@ -129,6 +129,11 @@ class DataPolicyData(BaseModel):
         None,
         description="Application ID from IAM; links policy to specific application",
     )
+    sync_status: Optional[str] = Field(
+        None,
+        description="Keycloak role sync status. Celery provisions the role.",
+    )
+    sync_error: Optional[str] = Field(None, description="Last Keycloak sync error")
 
 
 class GetPolicyRequestPayload(BaseModel):

@@ -5,6 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 type AuthState = {
   user: { name?: string; email?: string; preferred_username?: string; sub?: string } | null;
   logout: () => void;
+  denied: boolean;
+  setDenied: (denied: boolean) => void;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -12,6 +14,7 @@ const AuthContext = createContext<AuthState | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthState["user"]>(null);
   const [ready, setReady] = useState(false);
+  const [denied, setDenied] = useState(false);
 
   const logout = useCallback(() => {
     window.location.href = "/api/logout";
@@ -37,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return <p className="p-8 text-[16px]">…</p>;
   }
 
-  return <AuthContext.Provider value={{ user, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, logout, denied, setDenied }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

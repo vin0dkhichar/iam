@@ -47,6 +47,8 @@ class ApplicationAccessService(BaseService):
             role_mnemonic=role.role_mnemonic,
             role_description=role.role_description,
             application_id=role.application_id,
+            sync_status=role.sync_status,
+            sync_error=role.sync_error,
             active=bool(role.active),
             created_at=dt_iso(role.created_at),
             updated_at=dt_iso(role.updated_at),
@@ -71,7 +73,11 @@ class ApplicationAccessService(BaseService):
             await self._get_application(session, payload.application_id)
             stmt = (
                 select(Role)
-                .where(Role.application_id == payload.application_id, ~Role.role_mnemonic.like("DP_%"))
+                .where(
+                    Role.application_id == payload.application_id,
+                    ~Role.role_mnemonic.like("DP_%"),
+                    ~Role.role_mnemonic.like("AGC_%"),
+                )
                 .order_by(Role.id.desc())
             )
             rows, total = await paginate(session, stmt, page=page, page_size=page_size)

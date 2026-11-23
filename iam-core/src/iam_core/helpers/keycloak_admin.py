@@ -224,21 +224,24 @@ class KeycloakAdmin:
         agency_id: str | None,
     ) -> str:
         attributes = {"agency_id": [agency_id]} if agency_id else {}
+        body = {
+            "username": email,
+            "email": email,
+            "firstName": first_name,
+            "lastName": last_name,
+            "enabled": True,
+            "emailVerified": False,
+            "requiredActions": ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
+            "attributes": attributes,
+        }
+        if agency_id:
+            body["groups"] = [f"/{agency_id}"]
         response = await self._request(
             client,
             "POST",
             realm,
             "/users",
-            json_body={
-                "username": email,
-                "email": email,
-                "firstName": first_name,
-                "lastName": last_name,
-                "enabled": True,
-                "emailVerified": False,
-                # "requiredActions": ["VERIFY_EMAIL", "UPDATE_PASSWORD"],
-                "attributes": attributes,
-            },
+            json_body=body,
             expected=(201, 409),
         )
         if response.status_code == 409:
@@ -289,6 +292,39 @@ class KeycloakAdmin:
             realm,
             f"/users/{user_id}/role-mappings/clients/{client_uuid}",
             json_body=roles,
+        )
+
+    async def ensure_groups_claim(self, client: httpx.AsyncClient, realm: str, client_id: str) -> None:
+        """Put the user's Keycloak groups on the access token as ``groups``."""
+        client_uuid = await self.find_client_uuid(client, realm, client_id)
+        if not client_uuid:
+            raise KeycloakAdminError(f"Keycloak client not found: {client_id}")
+        existing = await self._request(
+            client,
+            "GET",
+            realm,
+            f"/clients/{client_uuid}/protocol-mappers/models",
+        )
+        if any(row.get("name") == "groups" for row in existing.json()):
+            return
+        await self._request(
+            client,
+            "POST",
+            realm,
+            f"/clients/{client_uuid}/protocol-mappers/models",
+            json_body={
+                "name": "groups",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-group-membership-mapper",
+                "config": {
+                    "claim.name": "groups",
+                    "full.path": "false",
+                    "id.token.claim": "true",
+                    "access.token.claim": "true",
+                    "userinfo.token.claim": "true",
+                },
+            },
+            expected=(201,),
         )
 
     async def join_group(self, client: httpx.AsyncClient, realm: str, user_id: str, group_id: str) -> None:

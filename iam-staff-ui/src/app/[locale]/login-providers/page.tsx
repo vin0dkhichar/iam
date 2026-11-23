@@ -82,6 +82,7 @@ export default function LoginProvidersPage() {
 
         if (data?.error) {
           setError(data.error);
+          toast.error(data.error);
           setItems([]);
           setTotal(0);
           return;
@@ -95,7 +96,9 @@ export default function LoginProvidersPage() {
         setTotal(data?.pagination?.number_of_items ?? list.length);
       } catch (e) {
         if (seq !== loadSeq.current) return;
-        setError(e instanceof Error ? e.message : "Failed to load");
+        const errorMessage = e instanceof Error ? e.message : "Failed to load";
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         if (seq === loadSeq.current) {
           setLoading(false);
@@ -117,6 +120,7 @@ export default function LoginProvidersPage() {
     setError(null);
     try {
       const payload: Record<string, unknown> = {
+        application_type: form.application_type || "staff",
         provider_name: form.provider_name.trim(),
         description: form.description || null,
         client_id: form.client_id.trim(),
@@ -147,13 +151,17 @@ export default function LoginProvidersPage() {
       });
       if (res?.error) {
         setError(res.error);
+        toast.error(res.error);
         return;
       }
       setModalOpen(false);
       setForm(emptyForm);
+      toast.success(t("loginProviderCreated"));
       await load(page);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Create failed");
+      const errorMessage = err instanceof Error ? err.message : "Create failed";
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setSaving(false);
     }

@@ -19,6 +19,7 @@ const AUTH_METHODS = [
 ] as const;
 
 interface LoginProviderForm {
+  application_type: string;
   provider_name: string;
   description: string;
   client_id: string;
@@ -52,6 +53,7 @@ interface LoginProviderModalProps {
 }
 
 const emptyForm: LoginProviderForm = {
+  application_type: "staff",
   provider_name: "",
   description: "",
   client_id: "",
@@ -89,6 +91,17 @@ export default function LoginProviderModal({
     <Modal title={t("addLoginProvider")} onClose={onClose} width="800">
       <form onSubmit={onSave}>
         <div className="grid grid-cols-2 gap-4">
+          <SelectField
+            label={t("applicationType")}
+            value={form.application_type}
+            onChange={(value) => onChange("application_type", value)}
+            options={[
+              { value: "staff", label: "staff" },
+              { value: "agent", label: "agent" },
+              { value: "beneficiary", label: "beneficiary" },
+            ]}
+            required
+          />
           <InputField
             label={t("providerName")}
             value={form.provider_name}

@@ -1,5 +1,6 @@
 import Can from "@/components/Can";
 import DeleteButton from "@/components/DeleteButton";
+import { statusLabel } from "@/shared/utils/statusLabel";
 import { Role, Permission, RolePermission } from "../types";
 
 export function createDeleteButton(
@@ -30,6 +31,13 @@ export function getRoleColumns(
       key: "description",
       header: t("description"),
       render: (role: Role) => role.role_description || "—",
+    },
+    {
+      key: "status",
+      header: t("status"),
+      render: (role: Role) => (
+        <span title={role.sync_error || undefined}>{statusLabel(t, role.sync_status)}</span>
+      ),
     },
     {
       key: "actions",

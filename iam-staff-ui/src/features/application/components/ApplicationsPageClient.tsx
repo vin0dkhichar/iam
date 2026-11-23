@@ -17,7 +17,6 @@ import {
 import ApplicationModal, {
   emptyForm as emptyApplicationForm,
 } from "./ApplicationModal";
-import { Modal, InputField, Button, FormActions } from "@/components";
 import { getApplicationColumns } from "@/features/application/utils/applicationTableColumns";
 import { useConfig } from "@/context/ConfigContext";
 
@@ -26,6 +25,7 @@ const emptyForm = emptyApplicationForm;
 interface Application {
   id: number;
   application_mnemonic: string;
+  application_type?: string | null;
   application_description?: string | null;
   application_url?: string | null;
   active?: boolean;
@@ -43,7 +43,12 @@ interface ListResponse {
   error?: string;
 }
 
-export default function ApplicationsPageClient() {
+export default function ApplicationsPageClient({
+  kind = "staff",
+}: {
+  kind?: "staff" | "agent";
+}) {
+  const isAgent = kind === "agent";
   const t = useTranslations();
   const { pageSize } = useConfig();
   const router = useRouter();
@@ -57,8 +62,6 @@ export default function ApplicationsPageClient() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [agencyOpen, setAgencyOpen] = useState(false);
-  const [agencyForm, setAgencyForm] = useState({ agency_id: "", name: "" });
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<Application | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -72,7 +75,11 @@ export default function ApplicationsPageClient() {
       try {
         const data = await execute("/api/applications", {
           method: "POST",
-          body: JSON.stringify({ current_page: p, page_size: pageSize }),
+          body: JSON.stringify({
+            current_page: p,
+            page_size: pageSize,
+            request_payload: { application_type: kind },
+          }),
         });
         if (seq !== loadSeq.current) return;
 
@@ -84,6 +91,7 @@ export default function ApplicationsPageClient() {
 
         if (data?.error) {
           setError(data.error);
+          toast.error(data.error);
           setItems([]);
           setTotal(0);
           return;
@@ -97,7 +105,9 @@ export default function ApplicationsPageClient() {
         setTotal(data?.pagination?.number_of_items ?? list.length);
       } catch (e) {
         if (seq !== loadSeq.current) return;
-        setError(e instanceof Error ? e.message : "Failed to load");
+        const errorMessage = e instanceof Error ? e.message : "Failed to load";
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         if (seq === loadSeq.current) {
           setLoading(false);
@@ -105,7 +115,7 @@ export default function ApplicationsPageClient() {
         }
       }
     },
-    [execute, pageSize],
+    [execute, pageSize, kind],
   );
 
   useEffect(() => {
@@ -118,15 +128,17 @@ export default function ApplicationsPageClient() {
     setSaving(true);
     setError(null);
     try {
+      const creatingAgent = form.application_type === "agent";
       const payload: Record<string, unknown> = {
         application_mnemonic: form.application_mnemonic.trim(),
+        application_type: form.application_type || "staff",
         application_description: form.application_description || null,
-        application_url: form.application_url || null,
-        api_url: form.api_url || null,
+        application_url: creatingAgent ? null : form.application_url || null,
+        api_url: creatingAgent ? null : form.api_url || null,
       };
-      if (form.order !== "") payload.order = Number(form.order);
-      if (form.width !== "") payload.width = Number(form.width);
-      if (form.icon_base64) payload.icon_base64 = form.icon_base64;
+      if (!creatingAgent && form.order !== "") payload.order = Number(form.order);
+      if (!creatingAgent && form.width !== "") payload.width = Number(form.width);
+      if (!creatingAgent && form.icon_base64) payload.icon_base64 = form.icon_base64;
 
       const res = await execute("/api/applications/create", {
         method: "POST",
@@ -138,7 +150,8 @@ export default function ApplicationsPageClient() {
         return;
       }
       setModalOpen(false);
-      setForm(emptyForm);
+      setForm({ ...emptyForm, application_type: kind });
+      toast.success(isAgent ? t("agencyCreated") : t("applicationCreated"));
       await load(page);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Create failed";
@@ -166,43 +179,13 @@ export default function ApplicationsPageClient() {
       setDeleteModalOpen(false);
       setItemToDelete(null);
       await load(page);
-      toast.success(t("applicationDeleted"));
+      toast.success(isAgent ? t("agencyDeleted") : t("applicationDeleted"));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Delete failed";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setDeleting(false);
-    }
-  }
-
-  async function handleCreateAgency(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await execute("/api/agencies", {
-        method: "POST",
-        body: JSON.stringify({
-          agency_id: agencyForm.agency_id.trim(),
-          name: agencyForm.name.trim(),
-        }),
-      });
-      if (res?.error) {
-        setError(res.error);
-        toast.error(res.error);
-        return;
-      }
-      setAgencyOpen(false);
-      setAgencyForm({ agency_id: "", name: "" });
-      await load(page);
-      toast.success(t("agencyCreated"));
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Create failed";
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -214,12 +197,9 @@ export default function ApplicationsPageClient() {
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-6">
-        <h1 className="font-semibold text-[24px] text-black">{t("applications")}</h1>
+        <h1 className="font-semibold text-[24px] text-black">{isAgent ? t("agencies") : t("applications")}</h1>
         <Can action="application:create">
-          <div className="flex gap-3">
-            <AddButton label={t("addAgency")} onClick={() => setAgencyOpen(true)} />
-            <AddButton onClick={() => setModalOpen(true)} />
-          </div>
+          <AddButton onClick={() => { setForm({ ...emptyForm, application_type: kind }); setModalOpen(true); }} />
         </Can>
       </div>
 
@@ -227,12 +207,12 @@ export default function ApplicationsPageClient() {
 
       <div className="bg-white rounded-[10px] py-6 shadow-sm">
         {loading || !loadedOnce ? (
-          <TableSkeleton rows={pageSize} headers={[t("mnemonic"), t("description"), t("url"), t("status"), t("actions")]} />
+          <TableSkeleton rows={pageSize} headers={isAgent ? [t("agencyId"), t("agencyName"), t("clientStatus"), t("groupStatus"), t("status"), t("actions")] : [t("mnemonic"), t("description"), t("url"), t("clientStatus"), t("status"), t("actions")]} />
         ) : (
           <Table
-            columns={getApplicationColumns({ onDelete: openDeleteModal, t })}
+            columns={getApplicationColumns({ onDelete: openDeleteModal, t, kind })}
             data={items}
-            onRowClick={(app) => router.push(`/applications/${app.id}`)}
+            onRowClick={(app) => router.push(isAgent ? `/agencies/${app.id}` : `/applications/${app.id}`)}
             emptyMessage={t("noData")}
           />
         )}
@@ -246,35 +226,6 @@ export default function ApplicationsPageClient() {
         )}
       </div>
 
-      {agencyOpen && (
-        <Modal title={t("addAgency")} onClose={() => setAgencyOpen(false)}>
-          <form onSubmit={handleCreateAgency}>
-            <div className="grid gap-4">
-              <InputField
-                label={t("agencyId")}
-                value={agencyForm.agency_id}
-                onChange={(value) => setAgencyForm((form) => ({ ...form, agency_id: value }))}
-                required
-              />
-              <InputField
-                label={t("agencyName")}
-                value={agencyForm.name}
-                onChange={(value) => setAgencyForm((form) => ({ ...form, name: value }))}
-                required
-              />
-            </div>
-            <FormActions>
-              <Button type="button" onClick={() => setAgencyOpen(false)}>
-                {t("cancel")}
-              </Button>
-              <Button type="submit" disabled={saving}>
-                {saving ? t("saving") : t("save")}
-              </Button>
-            </FormActions>
-          </form>
-        </Modal>
-      )}
-
       {modalOpen && (
         <ApplicationModal
           onClose={() => setModalOpen(false)}
@@ -287,7 +238,7 @@ export default function ApplicationsPageClient() {
 
       {deleteModalOpen && (
         <ConfirmModal
-          title={t("deleteApplication")}
+          title={isAgent ? t("deleteAgency") : t("deleteApplication")}
           warningText={itemToDelete?.is_self_registered ? t("cannotDeleteSelfRegistered") : t("deleteWillRemoveAllData")}
           confirming={deleting}
           onConfirm={handleDelete}

@@ -1,11 +1,12 @@
 # ruff: noqa: E402
 
-from celery import Celery
-from openg2p_fastapi_common.app import Initializer as BaseInitializer
-
 from .config import Settings
 
+# Register IAM_CELERY_DB_* before fastapi-common builds the database engine.
 _config = Settings.get_config()
+
+from celery import Celery
+from openg2p_fastapi_common.app import Initializer as BaseInitializer
 
 
 class Initializer(BaseInitializer):

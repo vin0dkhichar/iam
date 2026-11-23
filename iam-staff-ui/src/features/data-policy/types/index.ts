@@ -6,6 +6,8 @@ export interface DataPolicy {
   policy_type: string;
   register_id?: string | null;
   application_id?: number | null;
+  sync_status?: string | null;
+  sync_error?: string | null;
   policy_filter_expression?: any;
   active?: boolean;
 }

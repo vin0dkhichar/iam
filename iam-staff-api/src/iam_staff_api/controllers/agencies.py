@@ -4,7 +4,7 @@ from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
-from iam_core.models.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT
+from iam_core.helpers.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT
 from iam_core.models.enum import SyncStatus
 from iam_core.services.agency_service import AgencyService
 from iam_core.user_auth.decorators import require_permissions

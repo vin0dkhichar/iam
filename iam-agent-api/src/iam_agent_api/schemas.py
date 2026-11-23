@@ -21,6 +21,7 @@ class AgentUserResponse(BaseModel):
     agency_id: str | None = None
     enabled: str
     sync_status: str
+    roles: list[str] = []
     keycloak_user_id: str | None = None
 
 
@@ -33,6 +34,25 @@ class CreateAgentResponse(BaseModel):
     id: str
     agency_id: str
     sync_status: str
+
+
+class AgencyRolesResponse(BaseModel):
+    roles: list[str]
+
+
+class AgencyPolicyItem(BaseModel):
+    policy_id: str
+    policy_mnemonic: str
+    policy_description: str | None = None
+    policy_target: str
+    policy_type: str
+    register_id: str | None = None
+    policy_filter_expression: dict | None = None
+    sync_status: str | None = None
+
+
+class AgencyPoliciesResponse(BaseModel):
+    policies: list[AgencyPolicyItem]
 
 
 class AssignRolesResponse(BaseModel):

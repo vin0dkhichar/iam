@@ -1,6 +1,7 @@
 import Can from "@/components/Can";
 import DeleteButton from "@/components/DeleteButton";
 import Button from "@/components/Button";
+import { statusLabel } from "@/shared/utils/statusLabel";
 import { DataPolicy } from "../types";
 
 export function getDataPolicyColumns(
@@ -28,6 +29,13 @@ export function getDataPolicyColumns(
       key: "policy_type",
       header: t("policyType"),
       render: (dp: DataPolicy) => dp.policy_type || "—",
+    },
+    {
+      key: "status",
+      header: t("status"),
+      render: (dp: DataPolicy) => (
+        <span title={dp.sync_error || undefined}>{statusLabel(t, dp.sync_status)}</span>
+      ),
     },
     {
       key: "actions",

@@ -1,3 +1,7 @@
+export const USER_ACTIONS = {
+  create: "user:create",
+} as const;
+
 export const APPLICATION_ACTIONS = {
   view: "application:view",
   create: "application:create",

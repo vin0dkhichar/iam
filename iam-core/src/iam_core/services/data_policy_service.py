@@ -11,7 +11,7 @@ from collections import defaultdict
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 from openg2p_fastapi_common.service import BaseService
 
-from ..models import DataPolicy, Application
+from ..models import DataPolicy, Application, Role
 from ..models.enum import ApplicationType
 from ..schemas.data_policy import (
     PolicyFilterGroup,
@@ -33,7 +33,8 @@ class DataPolicyService(BaseService):
         policy = result.scalar_one_or_none()
         if not policy:
             raise ValueError(f"Data policy not found: {policy_id}")
-        return self._to_policy_data(policy)
+        statuses = await self._role_sync(session, [policy])
+        return self._to_policy_data(policy, statuses.get(policy.policy_mnemonic))
 
     async def get_all_policies(
         self,
@@ -67,7 +68,8 @@ class DataPolicyService(BaseService):
         total = (await session.execute(count_stmt)).scalar_one()
         result = await session.execute(stmt)
         policies = result.scalars().all()
-        return [self._to_policy_data(policy) for policy in policies], total
+        statuses = await self._role_sync(session, policies)
+        return [self._to_policy_data(policy, statuses.get(policy.policy_mnemonic)) for policy in policies], total
 
     async def add_policy(
         self,
@@ -119,7 +121,7 @@ class DataPolicyService(BaseService):
         session.add(policy)
         await session.flush()
         await session.refresh(policy)
-        return self._to_policy_data(policy)
+        return self._to_policy_data(policy, ("pending", None))
 
     async def remove_policy(
         self,
@@ -185,7 +187,8 @@ class DataPolicyService(BaseService):
             select(DataPolicy).where(DataPolicy.policy_mnemonic.in_(list(policy_mnemonics)))
         )
         policies = result.scalars().all()
-        return [self._to_policy_data(policy) for policy in policies]
+        statuses = await self._role_sync(session, policies)
+        return [self._to_policy_data(policy, statuses.get(policy.policy_mnemonic)) for policy in policies]
 
     async def policies_for_client_roles(
         self,
@@ -252,7 +255,29 @@ class DataPolicyService(BaseService):
             )
         return [self._to_policy_data(policy) for policy in matched]
 
-    def _to_policy_data(self, policy: DataPolicy) -> DataPolicyData:
+    async def _role_sync(
+        self, session: AsyncSession, policies: Sequence[DataPolicy]
+    ) -> dict[str, tuple[str | None, str | None]]:
+        application_ids = {policy.application_id for policy in policies if policy.application_id is not None}
+        mnemonics = {policy.policy_mnemonic for policy in policies}
+        if not application_ids or not mnemonics:
+            return {}
+        rows = (
+            await session.scalars(
+                select(Role).where(
+                    Role.application_id.in_(application_ids),
+                    Role.role_mnemonic.in_(mnemonics),
+                )
+            )
+        ).all()
+        return {row.role_mnemonic: (row.sync_status, row.sync_error) for row in rows}
+
+    def _to_policy_data(
+        self,
+        policy: DataPolicy,
+        sync: tuple[str | None, str | None] | None = None,
+    ) -> DataPolicyData:
+        status, error = sync if sync is not None else (None, None)
         return DataPolicyData(
             policy_id=policy.policy_id,
             policy_mnemonic=policy.policy_mnemonic,
@@ -261,6 +286,9 @@ class DataPolicyService(BaseService):
             policy_target=PolicyTarget(policy.policy_target),
             policy_type=DataPolicyType(policy.policy_type),
             policy_filter_expression=policy.policy_filter_expression,
+            application_id=policy.application_id,
+            sync_status=status,
+            sync_error=error,
         )
 
     def _validate_policy_filter_expression(self, expression: dict) -> dict:

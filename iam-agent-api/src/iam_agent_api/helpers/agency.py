@@ -3,7 +3,7 @@
 from fastapi import Request
 from openg2p_fastapi_common.errors.http_exceptions import ForbiddenError
 
-from iam_core.models.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT
+from iam_core.helpers.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT
 from iam_core.user_auth.helpers.claims_helper import AGENCY_ID_STATE_KEY
 
 

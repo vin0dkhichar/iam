@@ -17,6 +17,9 @@ from iam_core.user_auth.helpers.data_policy_role_helper import DP_ROLE_PREFIX
 from ..config import Settings
 from .agencies import admin_client_roles, require_synced_agency
 from ..schemas import (
+    AgencyUserItem,
+    AgencyUsersBody,
+    AgencyUsersResponse,
     AssignPoliciesBody,
     AssignPoliciesResponse,
     CreateAgencyAdminBody,
@@ -33,6 +36,7 @@ class UsersController(BaseController):
         self._policies = DataPolicyService.get_component() or DataPolicyService()
         self._settings = Settings.get_config(strict=False)
         self.router.add_api_route("/create_agency_admin", self.create_agency_admin, methods=["POST"])
+        self.router.add_api_route("/get_agency_users", self.get_agency_users, methods=["POST"])
         self.router.add_api_route("/assign_policies", self.assign_policies, methods=["POST"])
 
     @require_permissions({"user:create"})
@@ -56,6 +60,25 @@ class UsersController(BaseController):
             agency_id=body.agency_id,
             sync_status="pending",
         )
+
+    @require_permissions({"application:view"})
+    async def get_agency_users(self, body: AgencyUsersBody) -> AgencyUsersResponse:
+        session_maker = get_async_session_maker()
+        async with session_maker() as session:
+            users = await self._service.list_for_agency(session, body.agency_id)
+            return AgencyUsersResponse(
+                items=[
+                    AgencyUserItem(
+                        id=user.id,
+                        email=user.email,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                        sync_status=user.sync_status,
+                        enabled=user.enabled,
+                    )
+                    for user in users
+                ]
+            )
 
     @require_permissions({"user:create"})
     async def assign_policies(self, body: AssignPoliciesBody) -> AssignPoliciesResponse:

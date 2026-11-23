@@ -9,7 +9,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.helpers.keycloak_admin import KeycloakAdmin, KeycloakAdminError
 from iam_core.helpers.keycloak_admin_config import ProvisioningSettings
-from iam_core.models.agency import app_client_id
+from iam_core.helpers.agency import AGENT_WEB_CLIENT
 from iam_core.models.application import Application
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.role import Role
@@ -17,6 +17,17 @@ from iam_core.models.user import User
 from iam_core.services.user_role_assignment import assign_client_roles
 
 from .app import celery_app
+
+_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _run(coro):
+    """Reuse one loop per process so the async DB pool stays on the same loop."""
+    global _loop
+    if _loop is None or _loop.is_closed():
+        _loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(_loop)
+    return _loop.run_until_complete(coro)
 
 
 def keycloak_realm(realm: str, settings: ProvisioningSettings) -> str:
@@ -32,11 +43,7 @@ def keycloak_realm(realm: str, settings: ProvisioningSettings) -> str:
 async def provision_application_client(session, admin: KeycloakAdmin, application: Application) -> None:
     realm = keycloak_realm(application.application_type, admin._settings)
     name = application.application_description or application.application_mnemonic
-    client_id = (
-        app_client_id(application.application_mnemonic)
-        if application.application_type == ApplicationType.AGENT.value
-        else application.application_mnemonic
-    )
+    client_id = application.application_mnemonic
     try:
         async with httpx.AsyncClient(timeout=20) as http:
             await admin.create_client(http, realm, client_id, name)
@@ -135,6 +142,7 @@ async def provision_user(session, admin: KeycloakAdmin, user: User) -> None:
             )
         user.keycloak_user_id = keycloak_id
         if group_id:
+            await admin.ensure_groups_claim(http, realm, AGENT_WEB_CLIENT)
             await admin.join_group(http, realm, keycloak_id, group_id)
         # Password email is off for now. The user is only created in Keycloak.
         # await admin.send_password_email(http, realm, keycloak_id)
@@ -219,19 +227,19 @@ async def _provision_one_user(user_id: str) -> None:
 
 @celery_app.task(name="iam.provision_application")
 def provision_application_task(application_id: int) -> None:
-    asyncio.run(_provision_application(application_id))
+    _run(_provision_application(application_id))
 
 
 @celery_app.task(name="iam.provision_agency_group")
 def provision_agency_group_task(application_id: int) -> None:
-    asyncio.run(_provision_agency_group(application_id))
+    _run(_provision_agency_group(application_id))
 
 
 @celery_app.task(name="iam.provision_role")
 def provision_role_task(role_id: int) -> None:
-    asyncio.run(_provision_role(role_id))
+    _run(_provision_role(role_id))
 
 
 @celery_app.task(name="iam.provision_user")
 def provision_user_task(user_id: str) -> None:
-    asyncio.run(_provision_one_user(user_id))
+    _run(_provision_one_user(user_id))

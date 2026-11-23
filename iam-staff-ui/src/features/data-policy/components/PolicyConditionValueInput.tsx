@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useAttributeValues } from '../hooks/useAttributeValues';
 import { useGeoLevelValues, getGeoLevelValueLabel } from '../hooks/useGeoLevelValues';
+import CustomDropdown from './CustomDropdown';
 import FilterSelect from './FilterSelect';
 import {
     type ConditionOperator,
@@ -53,29 +54,16 @@ function GeoValueInput({
         );
 
         return (
-            <select
+            <CustomDropdown
                 multiple
-                value={selected}
-                onChange={(event) => {
-                    const values = Array.from(event.target.selectedOptions).map(
-                        (option) => option.value,
-                    );
-                    onChange(values.join(', '));
-                }}
-                disabled={disabled || loading}
-                className="min-h-10.5 w-full border border-[#ED7C22] rounded-[10px] px-4 py-2 text-[16px] bg-[#FFFFFF] outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus:border-[#ED7C22] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {!options.length && (
-                    <option value="" disabled>
-                        {loading ? 'Loading...' : t('select_geo_value')}
-                    </option>
-                )}
-                {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </select>
+                options={options}
+                values={selected}
+                onValuesChange={(values) => onChange(values.join(', '))}
+                loading={loading}
+                disabled={disabled}
+                placeholder={t('select_geo_value')}
+                inline
+            />
         );
     }
 
@@ -119,29 +107,16 @@ function AttributeValueInput({
 
     if (multiValue) {
         return (
-            <select
+            <CustomDropdown
                 multiple
-                value={selected}
-                onChange={(event) => {
-                    const values = Array.from(event.target.selectedOptions).map(
-                        (option) => option.value,
-                    );
-                    onChange(values.join(', '));
-                }}
-                disabled={disabled || loading || !fieldId}
-                className="min-h-10.5 w-full border border-[#ED7C22] rounded-[10px] px-4 py-2 text-[16px] bg-[#FFFFFF] outline-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus:border-[#ED7C22] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-                {!options.length && (
-                    <option value="" disabled>
-                        {loading ? 'Loading...' : t('filter_value_placeholder')}
-                    </option>
-                )}
-                {options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                        {option.label}
-                    </option>
-                ))}
-            </select>
+                options={options}
+                values={selected}
+                onValuesChange={(values) => onChange(values.join(', '))}
+                loading={loading}
+                disabled={disabled || !fieldId}
+                placeholder={t('filter_value_placeholder')}
+                inline
+            />
         );
     }
 

@@ -53,6 +53,7 @@ IAM_STAFF_UI_PERMISSIONS = (
     "loginProvider:create",
     "loginProvider:edit",
     "loginProvider:delete",
+    "user:create",
 )
 
 
