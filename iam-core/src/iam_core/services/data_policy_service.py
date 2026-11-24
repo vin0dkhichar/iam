@@ -3,7 +3,7 @@
 import logging
 from typing import Sequence
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from collections import defaultdict
@@ -19,6 +19,18 @@ from ..schemas.data_policy import (
     DataPolicyData,
     DataPolicyType,
 )
+
+
+def _active_policy_scope():
+    """Hide policies whose Keycloak role was soft-deleted."""
+    inactive_role = exists(
+        select(Role.id).where(
+            Role.application_id == DataPolicy.application_id,
+            Role.role_mnemonic == DataPolicy.policy_mnemonic,
+            Role.active.is_(False),
+        )
+    )
+    return or_(DataPolicy.application_id.is_(None), ~inactive_role)
 
 _logger = logging.getLogger("iam-data-policy-service")
 
@@ -45,7 +57,7 @@ class DataPolicyService(BaseService):
         policy_target: str | None = None,
         register_id: str | None = None,
     ) -> tuple[list[DataPolicyData], int]:
-        stmt = select(DataPolicy).order_by(
+        stmt = select(DataPolicy).where(_active_policy_scope()).order_by(
             DataPolicy.policy_mnemonic,
             DataPolicy.policy_target,
         )
@@ -58,7 +70,7 @@ class DataPolicyService(BaseService):
         if current_page is not None and page_size is not None:
             stmt = stmt.offset((current_page - 1) * page_size).limit(page_size)
 
-        count_stmt = select(func.count()).select_from(DataPolicy)
+        count_stmt = select(func.count()).select_from(DataPolicy).where(_active_policy_scope())
         if application_id is not None:
             count_stmt = count_stmt.where(DataPolicy.application_id == application_id)
         if policy_target is not None:
@@ -156,6 +168,7 @@ class DataPolicyService(BaseService):
             select(Application.id).where(
                 Application.application_mnemonic == agency_id,
                 Application.application_type == ApplicationType.AGENT.value,
+                Application.active.is_(True),
             )
         )
         if application_id is None:
@@ -184,7 +197,10 @@ class DataPolicyService(BaseService):
             return []
 
         result = await session.execute(
-            select(DataPolicy).where(DataPolicy.policy_mnemonic.in_(list(policy_mnemonics)))
+            select(DataPolicy).where(
+                DataPolicy.policy_mnemonic.in_(list(policy_mnemonics)),
+                _active_policy_scope(),
+            )
         )
         policies = result.scalars().all()
         statuses = await self._role_sync(session, policies)
@@ -229,6 +245,7 @@ class DataPolicyService(BaseService):
                     select(DataPolicy).where(
                         DataPolicy.application_id.in_([application.id for application, _ in known]),
                         DataPolicy.policy_mnemonic.in_(wanted),
+                        _active_policy_scope(),
                     )
                 )
             )
@@ -267,6 +284,7 @@ class DataPolicyService(BaseService):
                 select(Role).where(
                     Role.application_id.in_(application_ids),
                     Role.role_mnemonic.in_(mnemonics),
+                    Role.active.is_(True),
                 )
             )
         ).all()

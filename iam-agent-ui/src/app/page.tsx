@@ -60,6 +60,10 @@ function isPolicyRole(role: string) {
   return role.startsWith("AGC_") || role.startsWith("DP_");
 }
 
+function isAgencyAdminRole(role: string) {
+  return role === "AGENCY_ADMIN";
+}
+
 function StaffTable({
   columns,
   rows,
@@ -173,7 +177,7 @@ export default function UsersPage() {
       first_name: user.first_name,
       last_name: user.last_name,
       email: user.email,
-      roles: assigned.filter((role) => !isPolicyRole(role)),
+      roles: assigned.filter((role) => !isPolicyRole(role) && !isAgencyAdminRole(role)),
       policies: assigned.filter(isPolicyRole),
     });
     setMode(nextMode);

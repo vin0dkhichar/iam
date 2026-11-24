@@ -74,6 +74,7 @@ class UserService:
             .where(
                 User.realm == ApplicationType.AGENT.value,
                 User.agency_id == agency_id,
+                User.active.is_(True),
             )
             .order_by(User.email.asc())
         )

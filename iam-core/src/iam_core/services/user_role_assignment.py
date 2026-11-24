@@ -19,6 +19,8 @@ async def assign_client_roles(
         client_uuid = await admin.find_client_uuid(client, realm, client_id)
         if not client_uuid:
             raise KeycloakAdminError(f"Client {client_id} was not found")
+        for role_name in role_names:
+            await admin.create_client_role(client, realm, client_uuid, role_name)
         await admin.assign_client_roles_to_user(
             client,
             realm,

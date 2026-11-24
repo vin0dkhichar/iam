@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { agentFetch } from "../../_lib/agent";
 
 export async function GET(req: NextRequest) {
-  return agentFetch(req, "/users/roles");
+  return agentFetch(req, "/users/roles", { method: "POST", body: "{}" });
 }
 
 export async function POST(req: NextRequest) {

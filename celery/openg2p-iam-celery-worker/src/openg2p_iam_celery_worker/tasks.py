@@ -4,15 +4,18 @@ import asyncio
 
 import httpx
 from openg2p_fastapi_common.context import get_async_session_maker
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.helpers.keycloak_admin import KeycloakAdmin, KeycloakAdminError
 from iam_core.helpers.keycloak_admin_config import ProvisioningSettings
 from iam_core.helpers.agency import AGENT_WEB_CLIENT
 from iam_core.models.application import Application
+from iam_core.models.data_policy import DataPolicy
+from iam_core.models.application_permission import ApplicationPermission
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.role import Role
+from iam_core.models.role_permission import RolePermission
 from iam_core.models.user import User
 from iam_core.services.user_role_assignment import assign_client_roles
 
@@ -40,7 +43,73 @@ def keycloak_realm(realm: str, settings: ProvisioningSettings) -> str:
     raise BadRequestError(message="realm must be staff, agent, or beneficiary")
 
 
+async def _delete_application(session, admin: KeycloakAdmin, application: Application) -> None:
+    realm = keycloak_realm(application.application_type, admin._settings)
+    try:
+        async with httpx.AsyncClient(timeout=20) as http:
+            client_uuid = await admin.find_client_uuid(http, realm, application.application_mnemonic)
+            if client_uuid:
+                await admin.delete_client(http, realm, client_uuid)
+            if application.application_type == ApplicationType.AGENT.value:
+                group_id = await admin.find_group_id(http, admin._settings.agent_realm, application.application_mnemonic)
+                if group_id:
+                    await admin.delete_group(http, admin._settings.agent_realm, group_id)
+    except KeycloakAdminError as exc:
+        application.client_status = SyncStatus.FAILED.value
+        application.client_error = str(exc)
+        await session.flush()
+        return
+    role_ids = list(
+        (await session.scalars(select(Role.id).where(Role.application_id == application.id))).all()
+    )
+    permission_ids = list(
+        (
+            await session.scalars(
+                select(ApplicationPermission.id).where(ApplicationPermission.application_id == application.id)
+            )
+        ).all()
+    )
+    if role_ids:
+        await session.execute(delete(RolePermission).where(RolePermission.role_id.in_(role_ids)))
+        await session.execute(delete(Role).where(Role.id.in_(role_ids)))
+    if permission_ids:
+        await session.execute(delete(RolePermission).where(RolePermission.permission_id.in_(permission_ids)))
+        await session.execute(delete(ApplicationPermission).where(ApplicationPermission.id.in_(permission_ids)))
+    await session.execute(delete(DataPolicy).where(DataPolicy.application_id == application.id))
+    await session.delete(application)
+    await session.flush()
+
+
+async def _delete_role(session, admin: KeycloakAdmin, role: Role) -> None:
+    application = await session.get(Application, role.application_id)
+    if application is not None:
+        realm = keycloak_realm(application.application_type, admin._settings)
+        try:
+            async with httpx.AsyncClient(timeout=20) as http:
+                client_uuid = await admin.find_client_uuid(http, realm, application.application_mnemonic)
+                if client_uuid:
+                    await admin.delete_client_role(http, realm, client_uuid, role.role_mnemonic)
+        except KeycloakAdminError as exc:
+            role.sync_status = SyncStatus.FAILED.value
+            role.sync_error = str(exc)
+            await session.flush()
+            return
+    await session.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
+    if application is not None:
+        await session.execute(
+            delete(DataPolicy).where(
+                DataPolicy.application_id == application.id,
+                DataPolicy.policy_mnemonic == role.role_mnemonic,
+            )
+        )
+    await session.delete(role)
+    await session.flush()
+
+
 async def provision_application_client(session, admin: KeycloakAdmin, application: Application) -> None:
+    if application.client_error == SyncAction.DELETE.value:
+        await _delete_application(session, admin, application)
+        return
     realm = keycloak_realm(application.application_type, admin._settings)
     name = application.application_description or application.application_mnemonic
     client_id = application.application_mnemonic
@@ -153,6 +222,9 @@ async def provision_user(session, admin: KeycloakAdmin, user: User) -> None:
 
 
 async def provision_role(session, admin: KeycloakAdmin, role: Role) -> None:
+    if role.sync_error == SyncAction.DELETE.value:
+        await _delete_role(session, admin, role)
+        return
     application = await session.get(Application, role.application_id)
     if application is None:
         role.sync_status = SyncStatus.FAILED.value

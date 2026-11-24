@@ -3,11 +3,10 @@ from __future__ import annotations
 from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError, NotFoundError
 from openg2p_fastapi_common.service import BaseService
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from ..helpers.query_helper import dt_iso, paginate
-from ..helpers.keycloak_helper import KeycloakHelper
 from iam_core.models import Application
-from iam_core.models.enum import ApplicationType, SyncStatus
+from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from ..schemas import (
     ApplicationCreatePayload,
     ApplicationData,
@@ -45,7 +44,8 @@ class ApplicationsService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             stmt = select(Application).where(
-                Application.application_type == (application_type or ApplicationType.STAFF.value)
+                Application.application_type == (application_type or ApplicationType.STAFF.value),
+                Application.active.is_(True),
             )
             stmt = stmt.order_by(
                 Application.created_at.desc().nullslast(),
@@ -58,7 +58,7 @@ class ApplicationsService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             app = await session.get(Application, payload.id)
-            if app is None:
+            if app is None or not app.active:
                 raise NotFoundError(message="Application not found")
             return self._to_data(app)
 
@@ -141,56 +141,42 @@ class ApplicationsService(BaseService):
                 raise BadRequestError(
                     message="Self-registered applications cannot be deleted from the staff UI"
                 )
-            app_data = self._to_data(app)
+            from iam_core.models import ApplicationPermission, DataPolicy, Role, RolePermission
 
-            # Delete Keycloak client before database commit
-            if auth_token:
-                try:
-                    kc_helper = KeycloakHelper(auth_token)
-                    await kc_helper.delete_client(app_data.application_mnemonic)
-                    # If client not found in Keycloak, still proceed with IAM delete (Keycloak is source of truth)
-                except Exception as e:
-                    await session.rollback()
-                    raise BadRequestError(message=f"Failed to delete Keycloak client: {e}")
-
-            # Delete related roles and permissions
-            from iam_core.models import Role, ApplicationPermission, RolePermission
-
-            # Get all roles for this application
-            roles = (await session.execute(select(Role).where(Role.application_id == app.id))).scalars().all()
-            role_ids = [r.id for r in roles]
-
-            # Get all permissions for this application
-            perms = (
-                (
-                    await session.execute(
-                        select(ApplicationPermission).where(ApplicationPermission.application_id == app.id)
-                    )
+            app.active = False
+            app.client_status = SyncStatus.PENDING.value
+            app.client_error = SyncAction.DELETE.value
+            roles = (await session.scalars(select(Role).where(Role.application_id == app.id))).all()
+            permissions = (
+                await session.scalars(
+                    select(ApplicationPermission).where(ApplicationPermission.application_id == app.id)
                 )
-                .scalars()
-                .all()
-            )
-            perm_ids = [p.id for p in perms]
-
-            # Delete role-permission mappings
+            ).all()
+            for role in roles:
+                role.active = False
+            for permission in permissions:
+                permission.active = False
+            role_ids = [role.id for role in roles]
+            permission_ids = [permission.id for permission in permissions]
+            mappings = []
             if role_ids:
-                await session.execute(delete(RolePermission).where(RolePermission.role_id.in_(role_ids)))
-            if perm_ids:
-                await session.execute(
-                    delete(RolePermission).where(RolePermission.permission_id.in_(perm_ids))
+                mappings.extend(
+                    (await session.scalars(select(RolePermission).where(RolePermission.role_id.in_(role_ids)))).all()
                 )
-
-            # Delete roles
-            if role_ids:
-                await session.execute(delete(Role).where(Role.id.in_(role_ids)))
-
-            # Delete permissions
-            if perm_ids:
-                await session.execute(
-                    delete(ApplicationPermission).where(ApplicationPermission.id.in_(perm_ids))
+            if permission_ids:
+                mappings.extend(
+                    (
+                        await session.scalars(
+                            select(RolePermission).where(RolePermission.permission_id.in_(permission_ids))
+                        )
+                    ).all()
                 )
-
-            # Delete the application
-            await session.delete(app)
+            for mapping in mappings:
+                mapping.active = False
+            policies = (
+                await session.scalars(select(DataPolicy).where(DataPolicy.application_id == app.id))
+            ).all()
+            for policy in policies:
+                await session.delete(policy)
             await session.commit()
-        return app_data
+            return self._to_data(app)

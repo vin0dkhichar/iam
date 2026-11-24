@@ -1,17 +1,16 @@
 """Staff adds agency admins after the agency group exists. The worker assigns AGENCY_ADMIN."""
 
 from __future__ import annotations
+from typing import Any
 
 from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
-from iam_core.helpers.keycloak_admin import KeycloakAdminError
 from iam_core.models import User
-from iam_core.models.enum import ApplicationType
+from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.services.data_policy_service import DataPolicyService
 from iam_core.services.user_service import UserService
-from iam_core.services.user_role_assignment import assign_client_roles
 from iam_core.user_auth.decorators import require_permissions
 from iam_core.user_auth.helpers.data_policy_role_helper import DP_ROLE_PREFIX
 from ..config import Settings
@@ -95,14 +94,15 @@ class UsersController(BaseController):
             user = await session.get(User, body.user_id)
             if user is None or user.realm != ApplicationType.STAFF.value or not user.keycloak_user_id:
                 raise BadRequestError(message="User is not a staff user yet")
-            keycloak_user_id = user.keycloak_user_id
-        try:
-            await assign_client_roles(
-                realm=self._settings.keycloak_realm,
-                client_id=self._settings.keycloak_client_id,
-                keycloak_user_id=keycloak_user_id,
-                role_names=[f"{DP_ROLE_PREFIX}{mnemonic}" for mnemonic in wanted],
-            )
-        except KeycloakAdminError as error:
-            raise BadRequestError(message=str(error)) from error
+            names = [f"{DP_ROLE_PREFIX}{mnemonic}" for mnemonic in wanted]
+            clients = list(user.keycloak_clients or [])
+            matched = next((entry for entry in clients if entry.get("client_id") == self._settings.keycloak_client_id), None)
+            if matched is None:
+                clients.append({"client_id": self._settings.keycloak_client_id, "roles": names})
+            else:
+                matched["roles"] = sorted(set[Any](matched.get("roles") or []) | set(names))
+            user.keycloak_clients = clients
+            user.sync_action = SyncAction.UPDATE_ROLES.value
+            user.sync_status = SyncStatus.PENDING.value
+            await session.commit()
         return AssignPoliciesResponse(user_id=body.user_id, policy_mnemonics=wanted)

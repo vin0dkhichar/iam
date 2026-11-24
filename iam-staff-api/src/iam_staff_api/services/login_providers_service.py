@@ -58,7 +58,11 @@ class LoginProvidersService(BaseService):
     async def get_login_providers(self, page: int, page_size: int) -> tuple[list[LoginProviderData], int]:
         async_session = get_async_session_maker()
         async with async_session() as session:
-            stmt = select(LoginProvider).order_by(LoginProvider.id.desc())
+            stmt = (
+                select(LoginProvider)
+                .where(LoginProvider.active.is_(True))
+                .order_by(LoginProvider.id.desc())
+            )
             rows, total = await paginate(session, stmt, page=page, page_size=page_size)
             return [self._to_data(r) for r in rows], total
 
@@ -66,7 +70,7 @@ class LoginProvidersService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             provider = await session.get(LoginProvider, payload.id)
-            if provider is None:
+            if provider is None or not provider.active:
                 raise NotFoundError(message="Login provider not found")
             return self._to_data(provider)
 
@@ -161,9 +165,9 @@ class LoginProvidersService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             provider = await session.get(LoginProvider, payload.id)
-            if provider is None:
+            if provider is None or not provider.active:
                 raise NotFoundError(message="Login provider not found")
-            provider_data = self._to_data(provider)
-            await session.delete(provider)
+            provider.active = False
             await session.commit()
-        return provider_data
+            await session.refresh(provider)
+            return self._to_data(provider)

@@ -27,8 +27,6 @@ from iam_core.user_auth.decorators import require_permissions
 from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
-from ..helpers.auth_token import bearer_from_request
-from ..helpers.keycloak_helper import KeycloakHelper
 from ..helpers.request_response_helper import RequestResponseHelper
 
 _logger = logging.getLogger(__name__)
@@ -232,7 +230,7 @@ class DataPolicyController(BaseController):
                 if should_delete_role and application_id is not None:
                     from sqlalchemy import select
 
-                    from iam_core.models import Application, Role
+                    from iam_core.models import Role
                     from iam_core.models.enum import SyncStatus
 
                     role = await session.scalar(
@@ -241,18 +239,12 @@ class DataPolicyController(BaseController):
                             Role.role_mnemonic == policy_mnemonic,
                         )
                     )
-                    if role is not None and role.sync_status == SyncStatus.SYNCED.value:
-                        auth_token = bearer_from_request(http_request) or ""
-                        application = await session.get(Application, application_id)
-                        if auth_token and application is not None:
-                            try:
-                                await KeycloakHelper(auth_token).delete_role(
-                                    policy_mnemonic, application.application_mnemonic
-                                )
-                            except Exception as exc:
-                                _logger.warning("Failed to delete data policy role from Keycloak: %s", exc)
                     if role is not None:
-                        await session.delete(role)
+                        from iam_core.models.enum import SyncAction
+
+                        role.active = False
+                        role.sync_status = SyncStatus.PENDING.value
+                        role.sync_error = SyncAction.DELETE.value
                 await session.commit()
             return self.helper.construct_payload_response(
                 request,

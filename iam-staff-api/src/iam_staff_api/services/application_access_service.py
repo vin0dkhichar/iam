@@ -5,17 +5,16 @@ import logging
 from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError, NotFoundError
 from openg2p_fastapi_common.service import BaseService
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from ..helpers.query_helper import dt_iso, paginate
-from ..helpers.keycloak_helper import KeycloakHelper
 from iam_core.models import (
     ApplicationPermission,
     Application,
     Role,
     RolePermission,
 )
-from iam_core.models.enum import SyncStatus
+from iam_core.models.enum import SyncAction, SyncStatus
 from ..schemas import (
     ApplicationScopedPayload,
     PermissionCreatePayload,
@@ -37,7 +36,7 @@ _logger = logging.getLogger("iam-application-access-service")
 class ApplicationAccessService(BaseService):
     async def _get_application(self, session, application_id: int) -> Application:
         app = await session.get(Application, application_id)
-        if app is None:
+        if app is None or not app.active:
             raise NotFoundError(message="Application not found")
         return app
 
@@ -75,6 +74,7 @@ class ApplicationAccessService(BaseService):
                 select(Role)
                 .where(
                     Role.application_id == payload.application_id,
+                    Role.active.is_(True),
                     ~Role.role_mnemonic.like("DP_%"),
                     ~Role.role_mnemonic.like("AGC_%"),
                 )
@@ -123,22 +123,29 @@ class ApplicationAccessService(BaseService):
             role = await session.get(Role, payload.id)
             if role is None or role.application_id != payload.application_id:
                 raise NotFoundError(message="Role not found")
-            role_data = self._role_data(role)
-            app = await self._get_application(session, payload.application_id)
+            from iam_core.models import DataPolicy
 
-            # Delete from Keycloak before database commit
-            if auth_token:
-                try:
-                    kc_helper = KeycloakHelper(auth_token)
-                    await kc_helper.delete_role(role_data.role_mnemonic, app.application_mnemonic)
-                    # If role not found in Keycloak, still proceed with IAM delete (Keycloak is source of truth)
-                except Exception as e:
-                    raise BadRequestError(message=f"Failed to delete role from Keycloak: {e}")
-
-            await session.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
-            await session.delete(role)
+            role.active = False
+            role.sync_status = SyncStatus.PENDING.value
+            role.sync_error = SyncAction.DELETE.value
+            mappings = (
+                await session.scalars(select(RolePermission).where(RolePermission.role_id == role.id))
+            ).all()
+            for mapping in mappings:
+                mapping.active = False
+            policies = (
+                await session.scalars(
+                    select(DataPolicy).where(
+                        DataPolicy.application_id == role.application_id,
+                        DataPolicy.policy_mnemonic == role.role_mnemonic,
+                    )
+                )
+            ).all()
+            for policy in policies:
+                await session.delete(policy)
             await session.commit()
-        return role_data
+            await session.refresh(role)
+            return self._role_data(role)
 
     async def get_permissions(
         self, payload: ApplicationScopedPayload, page: int, page_size: int
@@ -148,7 +155,10 @@ class ApplicationAccessService(BaseService):
             await self._get_application(session, payload.application_id)
             stmt = (
                 select(ApplicationPermission)
-                .where(ApplicationPermission.application_id == payload.application_id)
+                .where(
+                    ApplicationPermission.application_id == payload.application_id,
+                    ApplicationPermission.active.is_(True),
+                )
                 .order_by(ApplicationPermission.id.desc())
             )
             rows, total = await paginate(session, stmt, page=page, page_size=page_size)
@@ -191,13 +201,19 @@ class ApplicationAccessService(BaseService):
         async with async_session() as session:
             await self._get_application(session, payload.application_id)
             perm = await session.get(ApplicationPermission, payload.id)
-            if perm is None or perm.application_id != payload.application_id:
+            if perm is None or perm.application_id != payload.application_id or not perm.active:
                 raise NotFoundError(message="Permission not found")
-            perm_data = self._perm_data(perm)
-            await session.execute(delete(RolePermission).where(RolePermission.permission_id == perm.id))
-            await session.delete(perm)
+            perm.active = False
+            mappings = (
+                await session.scalars(
+                    select(RolePermission).where(RolePermission.permission_id == perm.id)
+                )
+            ).all()
+            for mapping in mappings:
+                mapping.active = False
             await session.commit()
-        return perm_data
+            await session.refresh(perm)
+            return self._perm_data(perm)
 
     async def get_role_permissions(
         self, payload: RolePermissionListPayload, page: int, page_size: int
@@ -206,7 +222,14 @@ class ApplicationAccessService(BaseService):
         async with async_session() as session:
             await self._get_application(session, payload.application_id)
             roles = (
-                (await session.execute(select(Role).where(Role.application_id == payload.application_id)))
+                (
+                    await session.execute(
+                        select(Role).where(
+                            Role.application_id == payload.application_id,
+                            Role.active.is_(True),
+                        )
+                    )
+                )
                 .scalars()
                 .all()
             )
@@ -216,7 +239,8 @@ class ApplicationAccessService(BaseService):
                 (
                     await session.execute(
                         select(ApplicationPermission).where(
-                            ApplicationPermission.application_id == payload.application_id
+                            ApplicationPermission.application_id == payload.application_id,
+                            ApplicationPermission.active.is_(True),
                         )
                     )
                 )
@@ -227,7 +251,10 @@ class ApplicationAccessService(BaseService):
             if not role_ids:
                 return [], 0
 
-            stmt = select(RolePermission).where(RolePermission.role_id.in_(role_ids))
+            stmt = select(RolePermission).where(
+                RolePermission.role_id.in_(role_ids),
+                RolePermission.active.is_(True),
+            )
             if payload.role_id is not None:
                 stmt = stmt.where(RolePermission.role_id == payload.role_id)
             if payload.permission_id is not None:
@@ -312,7 +339,10 @@ class ApplicationAccessService(BaseService):
             perm = await session.get(ApplicationPermission, mapping.permission_id)
             role_mnemonic = role.role_mnemonic if role else None
             permission_mnemonic = perm.permission_mnemonic if perm else None
-            mapping_data = RolePermissionData(
+            mapping.active = False
+            await session.commit()
+            await session.refresh(mapping)
+            return RolePermissionData(
                 id=mapping.id,
                 role_id=mapping.role_id,
                 permission_id=mapping.permission_id,
@@ -322,6 +352,3 @@ class ApplicationAccessService(BaseService):
                 created_at=dt_iso(mapping.created_at),
                 updated_at=dt_iso(mapping.updated_at),
             )
-            await session.delete(mapping)
-            await session.commit()
-        return mapping_data

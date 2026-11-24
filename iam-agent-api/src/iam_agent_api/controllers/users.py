@@ -6,6 +6,7 @@ from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError, ForbiddenError
 from sqlalchemy import select
 
+from iam_core.helpers.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT, merge_agency_client_roles
 from iam_core.models.application import Application
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.role import Role
@@ -29,10 +30,19 @@ from ..schemas import (
 
 
 def _user_roles(user) -> list[str]:
+    """Roles on the agency client only. AGENCY_ADMIN on agency-web stays out of this list."""
+    agency_id = user.agency_id
     roles: list[str] = []
     for entry in user.keycloak_clients or []:
-        roles.extend(entry.get("roles") or [])
-    return sorted({role for role in roles if role})
+        client_id = entry.get("client_id")
+        if client_id == AGENT_WEB_CLIENT:
+            continue
+        if agency_id and client_id != agency_id:
+            continue
+        for role in entry.get("roles") or []:
+            if role and role != AGENCY_ADMIN_ROLE:
+                roles.append(role)
+    return sorted(set(roles))
 
 
 def _user_row(user) -> AgentUserResponse:
@@ -55,9 +65,9 @@ class UsersController(BaseController):
         self.router.prefix = "/users"
         self.router.tags += ["users"]
         self._service = UserService()
-        self.router.add_api_route("", self.list_users, methods=["GET"])
-        self.router.add_api_route("/roles", self.list_roles, methods=["GET"])
-        self.router.add_api_route("/data-policies", self.list_data_policies, methods=["GET"])
+        self.router.add_api_route("", self.list_users, methods=["POST"])
+        self.router.add_api_route("/roles", self.list_roles, methods=["POST"])
+        self.router.add_api_route("/data-policies", self.list_data_policies, methods=["POST"])
         self.router.add_api_route("/create", self.create_user, methods=["POST"])
         self.router.add_api_route("/assign_roles", self.assign_roles, methods=["POST"])
         self.router.add_api_route("/delete", self.delete_user, methods=["POST"])
@@ -78,7 +88,10 @@ class UsersController(BaseController):
         session_maker = get_async_session_maker()
         async with session_maker() as session:
             application = await session.scalar(
-                select(Application).where(Application.application_mnemonic == agency_id)
+                select(Application).where(
+                    Application.application_mnemonic == agency_id,
+                    Application.active.is_(True),
+                )
             )
             if application is None:
                 return AgencyRolesResponse(roles=[])
@@ -86,6 +99,7 @@ class UsersController(BaseController):
                 select(Role)
                 .where(
                     Role.application_id == application.id,
+                    Role.active.is_(True),
                     ~Role.role_mnemonic.like("AGC_%"),
                     ~Role.role_mnemonic.like("DP_%"),
                 )
@@ -125,7 +139,13 @@ class UsersController(BaseController):
         agency_id = agency_id_from_request(request)
         session_maker = get_async_session_maker()
         require_agency_admin(request)
-        roles = sorted({item.strip() for item in body.roles if item.strip()})
+        roles = sorted(
+            {
+                item.strip()
+                for item in body.roles
+                if item.strip() and item.strip() != AGENCY_ADMIN_ROLE
+            }
+        )
         async with session_maker() as session:
             user = await self._service.create_user(
                 session,
@@ -144,15 +164,26 @@ class UsersController(BaseController):
     async def assign_roles(self, request: Request, body: AssignRolesBody) -> AssignRolesResponse:
         agency_id = agency_id_from_request(request)
         require_agency_admin(request)
-        roles = sorted({item.strip() for item in body.roles if item.strip()})
+        roles = sorted(
+            {
+                item.strip()
+                for item in body.roles
+                if item.strip() and item.strip() != AGENCY_ADMIN_ROLE
+            }
+        )
         if not roles:
             raise BadRequestError(message="Choose at least one role")
         session_maker = get_async_session_maker()
         async with session_maker() as session:
             user = await session.get(User, body.user_id)
-            if user is None or user.realm != ApplicationType.AGENT.value or user.agency_id != agency_id:
+            if (
+                user is None
+                or not user.active
+                or user.realm != ApplicationType.AGENT.value
+                or user.agency_id != agency_id
+            ):
                 raise ForbiddenError(message="User is not in this agency")
-            user.keycloak_clients = [{"client_id": agency_id, "roles": roles}]
+            user.keycloak_clients = merge_agency_client_roles(user.keycloak_clients, agency_id, roles)
             user.sync_action = SyncAction.UPDATE_ROLES.value
             user.sync_status = SyncStatus.PENDING.value
             await session.commit()
@@ -165,8 +196,9 @@ class UsersController(BaseController):
         session_maker = get_async_session_maker()
         async with session_maker() as session:
             user = await session.get(User, user_id)
-            if user is None or user.agency_id != agency_id:
+            if user is None or not user.active or user.agency_id != agency_id:
                 raise ForbiddenError(message="User is not in this agency")
+            user.active = False
             if not user.keycloak_user_id:
                 await session.delete(user)
             else:

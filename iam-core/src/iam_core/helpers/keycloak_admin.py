@@ -115,6 +115,17 @@ class KeycloakAdmin:
             raise KeycloakAdminError("Keycloak did not return a client location")
         return location.rstrip("/").rsplit("/", 1)[-1]
 
+    async def delete_client_role(
+        self, client: httpx.AsyncClient, realm: str, client_uuid: str, role_name: str
+    ) -> None:
+        await self._request(
+            client,
+            "DELETE",
+            realm,
+            f"/clients/{client_uuid}/roles/{quote(role_name, safe='')}",
+            expected=(204, 404),
+        )
+
     async def create_client_role(
         self, client: httpx.AsyncClient, realm: str, client_uuid: str, role_name: str
     ) -> None:
