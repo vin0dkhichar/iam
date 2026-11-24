@@ -161,7 +161,11 @@ class ApplicationsService(BaseService):
             mappings = []
             if role_ids:
                 mappings.extend(
-                    (await session.scalars(select(RolePermission).where(RolePermission.role_id.in_(role_ids)))).all()
+                    (
+                        await session.scalars(
+                            select(RolePermission).where(RolePermission.role_id.in_(role_ids))
+                        )
+                    ).all()
                 )
             if permission_ids:
                 mappings.extend(

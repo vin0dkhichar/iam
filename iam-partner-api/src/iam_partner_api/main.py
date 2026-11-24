@@ -1,6 +1,9 @@
-from openg2p_fastapi_common.ping import PingInitializer
+#!/usr/bin/env python3
 
-from .app import Initializer
+# ruff: noqa: I001
+
+from iam_partner_api.app import Initializer
+from openg2p_fastapi_common.ping import PingInitializer
 
 initializer = Initializer()
 PingInitializer()

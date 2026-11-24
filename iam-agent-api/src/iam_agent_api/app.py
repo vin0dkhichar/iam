@@ -1,7 +1,5 @@
 # ruff: noqa: E402
 
-import asyncio
-
 from .config import Settings
 
 _config = Settings.get_config()
@@ -9,7 +7,6 @@ _config = Settings.get_config()
 from iam_core.controllers import AccessController, AuthController, IdentityProviderController
 from iam_core.models.enum import ApplicationType
 from iam_core.services.data_policy_service import DataPolicyService
-from iam_core.models import LoginProvider
 from iam_core.user_auth.app import Initializer as AuthInitializer
 from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX
 from iam_core.user_auth.middleware import CsrfMiddleware
@@ -79,10 +76,6 @@ class Initializer(AuthInitializer):
         AccessController().post_init()
 
     def migrate_database(self, args):
+        # Schema migrations live only in iam-staff-api to avoid concurrent DDL.
         super().migrate_database(args)
-
-        async def migrate():
-            await LoginProvider.create_migrate()
-
-        asyncio.run(migrate())
         DataLoader().load()

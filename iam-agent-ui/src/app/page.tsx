@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { toast } from "react-toastify";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/Auth";
+import Pagination from "@/components/Pagination";
 
 function errorMessage(
   data: {
@@ -33,6 +34,11 @@ type AgentUser = {
   last_name: string;
   sync_status: string;
   roles: string[];
+};
+
+type AgencyRole = {
+  role_mnemonic: string;
+  sync_status?: string | null;
 };
 
 type AgencyPolicy = {
@@ -68,13 +74,15 @@ function StaffTable({
   columns,
   rows,
   empty,
+  footer,
 }: {
   columns: string[];
   rows: { key: string; cells: ReactNode[] }[];
   empty: string;
+  footer?: ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-[10px] bg-white py-6 shadow-[0_1px_2px_rgba(6,19,39,0.05)]">
+    <div className="overflow-hidden rounded-[10px] bg-white pb-6 pt-6 shadow-[0_1px_2px_rgba(6,19,39,0.05)]">
       <table className="w-full table-fixed border-collapse bg-white">
         <thead>
           <tr>
@@ -103,6 +111,7 @@ function StaffTable({
           )}
         </tbody>
       </table>
+      {footer}
     </div>
   );
 }
@@ -114,12 +123,17 @@ function statusLabel(t: (key: string) => string, value?: string | null) {
   return known.includes(key) ? t(key) : value;
 }
 
+const PAGE_SIZE = 10;
+
 export default function UsersPage() {
   const t = useTranslations();
   const { setDenied } = useAuth();
   const menu = useSearchParams().get("menu") || "users";
   const [users, setUsers] = useState<AgentUser[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const [roles, setRoles] = useState<AgencyRole[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>(null);
   const [selected, setSelected] = useState<AgentUser | null>(null);
@@ -128,31 +142,50 @@ export default function UsersPage() {
   const [policies, setPolicies] = useState<AgencyPolicy[]>([]);
   const [viewPolicy, setViewPolicy] = useState<AgencyPolicy | null>(null);
 
-  async function load() {
-    const [usersResponse, rolesResponse, policiesResponse] = await Promise.all([
-      fetch("/api/users"),
-      fetch("/api/users/roles"),
-      fetch("/api/users/data-policies"),
-    ]);
+  async function loadUsers(nextPage = page) {
+    const usersResponse = await fetch(
+      `/api/users?current_page=${nextPage}&page_size=${PAGE_SIZE}`,
+    );
     const usersData = await usersResponse.json();
-    const rolesData = await rolesResponse.json();
-    const policiesData = await policiesResponse.json();
-    const forbidden = [usersResponse, rolesResponse, policiesResponse].some((response) => response.status === 403);
-    if (forbidden) {
+    if (usersResponse.status === 403) {
       setDenied(true);
-      return;
+      return false;
     }
     if (!usersResponse.ok) {
       const message = errorMessage(usersData, t("loadFailed"), t("notAdmin"));
       setError(message);
       toast.error(message);
+      return false;
+    }
+    setUsers(usersData.users || []);
+    setTotal(usersData.pagination?.number_of_items ?? 0);
+    setPage(nextPage);
+    return true;
+  }
+
+  async function load() {
+    const [usersOk, rolesResponse, policiesResponse] = await Promise.all([
+      loadUsers(page),
+      fetch("/api/users/roles"),
+      fetch("/api/users/data-policies"),
+    ]);
+    const rolesData = await rolesResponse.json();
+    const policiesData = await policiesResponse.json();
+    const forbidden = [rolesResponse, policiesResponse].some((response) => response.status === 403);
+    if (!usersOk || forbidden) {
+      if (forbidden) setDenied(true);
       return;
     }
     if (!rolesResponse.ok) toast.error(errorMessage(rolesData, t("loadFailed"), t("notAdmin")));
     if (!policiesResponse.ok) toast.error(errorMessage(policiesData, t("loadFailed"), t("notAdmin")));
     setError("");
-    setUsers(usersData.users || []);
-    setRoleOptions(Array.isArray(rolesData.roles) ? rolesData.roles : []);
+    const nextRoles: AgencyRole[] = Array.isArray(rolesData.roles)
+      ? rolesData.roles.map((role: string | AgencyRole) =>
+          typeof role === "string" ? { role_mnemonic: role, sync_status: null } : role,
+        )
+      : [];
+    setRoles(nextRoles);
+    setRoleOptions(nextRoles.map((role) => role.role_mnemonic));
     setPolicies(Array.isArray(policiesData.policies) ? policiesData.policies : []);
   }
 
@@ -231,7 +264,7 @@ export default function UsersPage() {
       }
       toast.success(mode === "add" ? t("userCreated") : t("userUpdated"));
       setMode(null);
-      await load();
+      await loadUsers(mode === "add" ? 1 : page);
     } finally {
       setSaving(false);
     }
@@ -255,7 +288,8 @@ export default function UsersPage() {
       }
       toast.success(t("userDeleted"));
       setMode(null);
-      await load();
+      const nextPage = users.length <= 1 && page > 1 ? page - 1 : page;
+      await loadUsers(nextPage);
     } finally {
       setSaving(false);
     }
@@ -282,9 +316,12 @@ export default function UsersPage() {
       )}
       {menu === "roles" && (
         <StaffTable
-          columns={[t("name")]}
+          columns={[t("role"), t("status")]}
           empty={t("noRoles")}
-          rows={roleOptions.map((role) => ({ key: role, cells: [role] }))}
+          rows={roles.map((role) => ({
+            key: role.role_mnemonic,
+            cells: [role.role_mnemonic, statusLabel(t, role.sync_status)],
+          }))}
         />
       )}
       {menu === "data-policies" && (
@@ -320,12 +357,22 @@ export default function UsersPage() {
               </div>,
             ],
           }))}
+          footer={
+            users.length > 0 ? (
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={(next) => loadUsers(next)}
+              />
+            ) : null
+          }
         />
       )}
 
       {viewPolicy && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewPolicy(null)}>
-          <div className="max-h-[80vh] w-full max-w-[800px] overflow-y-auto rounded-[10px] border-4 border-[#EABB13] bg-white p-8 shadow-lg" onClick={(event) => event.stopPropagation()} role="dialog">
+          <div className="max-h-[80vh] w-full max-w-200 overflow-y-auto rounded-[10px] border-4 border-[#EABB13] bg-white p-8 shadow-lg" onClick={(event) => event.stopPropagation()} role="dialog">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="text-[22px] font-bold text-[#ED7C22]">{t("viewPolicy")}</h2>
               <button type="button" className="text-[28px] leading-none text-gray-500" onClick={() => setViewPolicy(null)}>×</button>
@@ -362,7 +409,7 @@ export default function UsersPage() {
       {mode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setMode(null)}>
           <div
-            className="max-h-[80vh] w-full max-w-[600px] overflow-y-auto rounded-[10px] border-4 border-[#EABB13] bg-white p-8 shadow-lg"
+            className="max-h-[80vh] w-full max-w-150 overflow-y-auto rounded-[10px] border-4 border-[#EABB13] bg-white p-8 shadow-lg"
             onClick={(event) => event.stopPropagation()}
             role="dialog"
           >

@@ -1,11 +1,16 @@
-from pydantic import BaseModel, Field
-
-from iam_core.schemas.data_policy import DataPolicyType
+from pydantic import BaseModel
 
 
 class CreateAgencyBody(BaseModel):
     agency_id: str
     name: str
+
+
+class CreateAgencyResponse(BaseModel):
+    id: str
+    agency_id: str
+    client_status: str
+    group_status: str
 
 
 class CreateAgencyAdminBody(BaseModel):
@@ -15,11 +20,7 @@ class CreateAgencyAdminBody(BaseModel):
     last_name: str
 
 
-class AddAgencyPolicyBody(BaseModel):
-    policy_mnemonic: str
-    policy_description: str | None = None
-    register_id: str | None = None
-    policy_type: DataPolicyType = DataPolicyType.ALLOW
-    policy_target: str = "REGISTER_RECORD"
-    policy_filter_expression: dict = Field(default_factory=dict)
-    application_id: int | None = None
+class CreateAgencyAdminResponse(BaseModel):
+    id: str
+    agency_id: str
+    sync_status: str

@@ -205,9 +205,7 @@ class ApplicationAccessService(BaseService):
                 raise NotFoundError(message="Permission not found")
             perm.active = False
             mappings = (
-                await session.scalars(
-                    select(RolePermission).where(RolePermission.permission_id == perm.id)
-                )
+                await session.scalars(select(RolePermission).where(RolePermission.permission_id == perm.id))
             ).all()
             for mapping in mappings:
                 mapping.active = False

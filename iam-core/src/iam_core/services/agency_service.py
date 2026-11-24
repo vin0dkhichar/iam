@@ -26,6 +26,7 @@ class AgencyService:
             client_status=SyncStatus.PENDING.value,
             group_status=SyncStatus.PENDING.value,
             is_self_registered=True,
+            active=True,
         )
         session.add(agency)
         await session.flush()
@@ -36,5 +37,6 @@ class AgencyService:
             select(Application).where(
                 Application.application_mnemonic == agency_id,
                 Application.application_type == ApplicationType.AGENT.value,
+                Application.active.is_(True),
             )
         )

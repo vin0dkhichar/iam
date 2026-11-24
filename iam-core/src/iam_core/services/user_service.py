@@ -68,14 +68,27 @@ class UserService:
         await session.flush()
         return user
 
-    async def list_for_agency(self, session: AsyncSession, agency_id: str) -> list[User]:
+    async def list_for_agency(
+        self,
+        session: AsyncSession,
+        agency_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> tuple[list[User], int]:
+        page = max(1, page)
+        page_size = max(1, min(page_size, 100))
+        filters = (
+            User.realm == ApplicationType.AGENT.value,
+            User.agency_id == agency_id,
+            User.active.is_(True),
+        )
+        total = int(await session.scalar(select(func.count()).select_from(User).where(*filters)) or 0)
         rows = await session.scalars(
             select(User)
-            .where(
-                User.realm == ApplicationType.AGENT.value,
-                User.agency_id == agency_id,
-                User.active.is_(True),
-            )
+            .where(*filters)
             .order_by(User.email.asc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
         )
-        return list(rows)
+        return list(rows), total

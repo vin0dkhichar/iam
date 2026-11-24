@@ -734,6 +734,9 @@ iamPartnerApi:
     IAM_PARTNER_DB_USERNAME: '{{ tpl .Values.global.iamDBUser $ }}'
     IAM_PARTNER_OPENAPI_ROOT_PATH: '{{ .Values.openapiRootPath }}'
     IAM_PARTNER_SIGNATURE_VALIDATION_ENABLED: false
+    IAM_PARTNER_CRYPTO_BACKEND: partner-mgmt
+    IAM_PARTNER_PARTNER_MGMT_API_URL: 'http://commons-services-pm-partner-api'
+    IAM_PARTNER_CRYPTO_ALLOWED_ALGORITHMS: "RS256,EdDSA,ES256"
 
   envVarsFrom:
     IAM_PARTNER_DB_PASSWORD:

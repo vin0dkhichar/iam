@@ -18,6 +18,7 @@ from .agencies import admin_client_roles, require_synced_agency
 from ..schemas import (
     AgencyUserItem,
     AgencyUsersBody,
+    AgencyUsersPagination,
     AgencyUsersResponse,
     AssignPoliciesBody,
     AssignPoliciesResponse,
@@ -62,9 +63,14 @@ class UsersController(BaseController):
 
     @require_permissions({"application:view"})
     async def get_agency_users(self, body: AgencyUsersBody) -> AgencyUsersResponse:
+        page = max(1, body.current_page or 1)
+        page_size = max(1, min(body.page_size or 10, 100))
         session_maker = get_async_session_maker()
         async with session_maker() as session:
-            users = await self._service.list_for_agency(session, body.agency_id)
+            users, total = await self._service.list_for_agency(
+                session, body.agency_id, page=page, page_size=page_size
+            )
+            pages = (total + page_size - 1) // page_size if page_size else 0
             return AgencyUsersResponse(
                 items=[
                     AgencyUserItem(
@@ -76,7 +82,13 @@ class UsersController(BaseController):
                         enabled=user.enabled,
                     )
                     for user in users
-                ]
+                ],
+                pagination=AgencyUsersPagination(
+                    current_page=page,
+                    page_size=page_size,
+                    number_of_items=total,
+                    number_of_pages=pages,
+                ),
             )
 
     @require_permissions({"user:create"})
@@ -96,7 +108,10 @@ class UsersController(BaseController):
                 raise BadRequestError(message="User is not a staff user yet")
             names = [f"{DP_ROLE_PREFIX}{mnemonic}" for mnemonic in wanted]
             clients = list(user.keycloak_clients or [])
-            matched = next((entry for entry in clients if entry.get("client_id") == self._settings.keycloak_client_id), None)
+            matched = next(
+                (entry for entry in clients if entry.get("client_id") == self._settings.keycloak_client_id),
+                None,
+            )
             if matched is None:
                 clients.append({"client_id": self._settings.keycloak_client_id, "roles": names})
             else:

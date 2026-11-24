@@ -19,13 +19,16 @@ from ..helpers.agency import agency_id_from_request, require_agency_admin
 from ..schemas import (
     AgencyPoliciesResponse,
     AgencyPolicyItem,
+    AgencyRoleItem,
     AgencyRolesResponse,
+    AgentUserListPagination,
     AgentUserListResponse,
     AgentUserResponse,
     AssignRolesBody,
     AssignRolesResponse,
     CreateAgentBody,
     CreateAgentResponse,
+    ListUsersBody,
 )
 
 
@@ -73,13 +76,27 @@ class UsersController(BaseController):
         self.router.add_api_route("/delete", self.delete_user, methods=["POST"])
 
     @requires_auth
-    async def list_users(self, request: Request) -> AgentUserListResponse:
+    async def list_users(self, request: Request, body: ListUsersBody) -> AgentUserListResponse:
         agency_id = agency_id_from_request(request)
         require_agency_admin(request)
+        page = body.current_page
+        page_size = body.page_size
         session_maker = get_async_session_maker()
         async with session_maker() as session:
-            users = await self._service.list_for_agency(session, agency_id)
-        return AgentUserListResponse(agency_id=agency_id, users=[_user_row(user) for user in users])
+            users, total = await self._service.list_for_agency(
+                session, agency_id, page=page, page_size=page_size
+            )
+        pages = (total + page_size - 1) // page_size if page_size else 0
+        return AgentUserListResponse(
+            agency_id=agency_id,
+            users=[_user_row(user) for user in users],
+            pagination=AgentUserListPagination(
+                current_page=page,
+                page_size=page_size,
+                number_of_items=total,
+                number_of_pages=pages,
+            ),
+        )
 
     @requires_auth
     async def list_roles(self, request: Request) -> AgencyRolesResponse:
@@ -105,7 +122,12 @@ class UsersController(BaseController):
                 )
                 .order_by(Role.role_mnemonic.asc())
             )
-            return AgencyRolesResponse(roles=[row.role_mnemonic for row in rows])
+            return AgencyRolesResponse(
+                roles=[
+                    AgencyRoleItem(role_mnemonic=row.role_mnemonic, sync_status=row.sync_status)
+                    for row in rows
+                ]
+            )
 
     @requires_auth
     async def list_data_policies(self, request: Request) -> AgencyPoliciesResponse:
@@ -120,12 +142,16 @@ class UsersController(BaseController):
                     policy_id=policy.policy_id,
                     policy_mnemonic=policy.policy_mnemonic,
                     policy_description=policy.policy_description,
-                    policy_target=policy.policy_target.value
-                    if hasattr(policy.policy_target, "value")
-                    else str(policy.policy_target),
-                    policy_type=policy.policy_type.value
-                    if hasattr(policy.policy_type, "value")
-                    else str(policy.policy_type),
+                    policy_target=(
+                        policy.policy_target.value
+                        if hasattr(policy.policy_target, "value")
+                        else str(policy.policy_target)
+                    ),
+                    policy_type=(
+                        policy.policy_type.value
+                        if hasattr(policy.policy_type, "value")
+                        else str(policy.policy_type)
+                    ),
                     register_id=policy.register_id,
                     policy_filter_expression=policy.policy_filter_expression,
                     sync_status=policy.sync_status,
@@ -140,11 +166,7 @@ class UsersController(BaseController):
         session_maker = get_async_session_maker()
         require_agency_admin(request)
         roles = sorted(
-            {
-                item.strip()
-                for item in body.roles
-                if item.strip() and item.strip() != AGENCY_ADMIN_ROLE
-            }
+            {item.strip() for item in body.roles if item.strip() and item.strip() != AGENCY_ADMIN_ROLE}
         )
         async with session_maker() as session:
             user = await self._service.create_user(
@@ -165,11 +187,7 @@ class UsersController(BaseController):
         agency_id = agency_id_from_request(request)
         require_agency_admin(request)
         roles = sorted(
-            {
-                item.strip()
-                for item in body.roles
-                if item.strip() and item.strip() != AGENCY_ADMIN_ROLE
-            }
+            {item.strip() for item in body.roles if item.strip() and item.strip() != AGENCY_ADMIN_ROLE}
         )
         if not roles:
             raise BadRequestError(message="Choose at least one role")

@@ -32,6 +32,7 @@ def _active_policy_scope():
     )
     return or_(DataPolicy.application_id.is_(None), ~inactive_role)
 
+
 _logger = logging.getLogger("iam-data-policy-service")
 
 
@@ -57,9 +58,13 @@ class DataPolicyService(BaseService):
         policy_target: str | None = None,
         register_id: str | None = None,
     ) -> tuple[list[DataPolicyData], int]:
-        stmt = select(DataPolicy).where(_active_policy_scope()).order_by(
-            DataPolicy.policy_mnemonic,
-            DataPolicy.policy_target,
+        stmt = (
+            select(DataPolicy)
+            .where(_active_policy_scope())
+            .order_by(
+                DataPolicy.policy_mnemonic,
+                DataPolicy.policy_target,
+            )
         )
         if application_id is not None:
             stmt = stmt.where(DataPolicy.application_id == application_id)
@@ -81,7 +86,9 @@ class DataPolicyService(BaseService):
         result = await session.execute(stmt)
         policies = result.scalars().all()
         statuses = await self._role_sync(session, policies)
-        return [self._to_policy_data(policy, statuses.get(policy.policy_mnemonic)) for policy in policies], total
+        return [
+            self._to_policy_data(policy, statuses.get(policy.policy_mnemonic)) for policy in policies
+        ], total
 
     async def add_policy(
         self,

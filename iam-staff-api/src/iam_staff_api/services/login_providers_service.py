@@ -59,9 +59,7 @@ class LoginProvidersService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             stmt = (
-                select(LoginProvider)
-                .where(LoginProvider.active.is_(True))
-                .order_by(LoginProvider.id.desc())
+                select(LoginProvider).where(LoginProvider.active.is_(True)).order_by(LoginProvider.id.desc())
             )
             rows, total = await paginate(session, stmt, page=page, page_size=page_size)
             return [self._to_data(r) for r in rows], total

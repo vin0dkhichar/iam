@@ -637,6 +637,8 @@ class AssignPoliciesBody(BaseModel):
 
 class AgencyUsersBody(BaseModel):
     agency_id: str
+    current_page: int = 1
+    page_size: int = 10
 
 
 class AgencyUserItem(BaseModel):
@@ -648,8 +650,16 @@ class AgencyUserItem(BaseModel):
     enabled: str
 
 
+class AgencyUsersPagination(BaseModel):
+    current_page: int
+    page_size: int
+    number_of_items: int
+    number_of_pages: int
+
+
 class AgencyUsersResponse(BaseModel):
     items: list[AgencyUserItem]
+    pagination: AgencyUsersPagination
 
 
 class CreateAgencyAdminResponse(BaseModel):

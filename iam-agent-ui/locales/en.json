@@ -27,6 +27,7 @@
   "status_synced": "Synced",
   "status_failed": "Failed",
   "roles": "Roles",
+  "role": "Role",
   "noUsers": "No users yet.",
   "noRoles": "No roles are available for this agency.",
   "dataPolicies": "Data policies",
@@ -48,5 +49,8 @@
   "updateFailed": "Could not update roles",
   "deleteFailed": "Could not delete user",
   "accessDenied": "Access Denied",
-  "notAdmin": "Only an agency admin can manage agents"
+  "notAdmin": "Only an agency admin can manage agents",
+  "of": "of",
+  "previousPage": "Previous",
+  "nextPage": "Next"
 }

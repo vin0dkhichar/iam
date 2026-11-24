@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CreateAgentBody(BaseModel):
@@ -13,6 +13,11 @@ class AssignRolesBody(BaseModel):
     roles: list[str]
 
 
+class ListUsersBody(BaseModel):
+    current_page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=10, ge=1, le=100)
+
+
 class AgentUserResponse(BaseModel):
     id: str
     email: str
@@ -25,9 +30,17 @@ class AgentUserResponse(BaseModel):
     keycloak_user_id: str | None = None
 
 
+class AgentUserListPagination(BaseModel):
+    current_page: int
+    page_size: int
+    number_of_items: int
+    number_of_pages: int
+
+
 class AgentUserListResponse(BaseModel):
     agency_id: str
     users: list[AgentUserResponse]
+    pagination: AgentUserListPagination
 
 
 class CreateAgentResponse(BaseModel):
@@ -36,8 +49,13 @@ class CreateAgentResponse(BaseModel):
     sync_status: str
 
 
+class AgencyRoleItem(BaseModel):
+    role_mnemonic: str
+    sync_status: str | None = None
+
+
 class AgencyRolesResponse(BaseModel):
-    roles: list[str]
+    roles: list[AgencyRoleItem]
 
 
 class AgencyPolicyItem(BaseModel):

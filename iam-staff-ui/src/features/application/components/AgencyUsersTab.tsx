@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "react-toastify";
-import { Card, Table } from "@/components";
+import { Card, Pagination, Table } from "@/components";
+import { useConfig } from "@/context/ConfigContext";
 import { statusLabel } from "@/shared/utils/statusLabel";
 
 interface AgencyUser {
@@ -22,35 +23,51 @@ export default function AgencyUsersTab({
   refreshKey: number;
 }) {
   const t = useTranslations();
+  const { pageSize } = useConfig();
   const [items, setItems] = useState<AgencyUser[]>([]);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch("/api/users/agency", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agency_id: agencyId }),
-      });
-      const data = await response.json();
-      if (data?.error) {
-        toast.error(data.error);
+  const load = useCallback(
+    async (p: number) => {
+      setLoading(true);
+      try {
+        const response = await fetch("/api/users/agency", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            agency_id: agencyId,
+            current_page: p,
+            page_size: pageSize || 10,
+          }),
+        });
+        const data = await response.json();
+        if (data?.error) {
+          toast.error(data.error);
+          setItems([]);
+          setTotal(0);
+          return;
+        }
+        const nextItems = Array.isArray(data?.items) ? data.items : [];
+        setItems(nextItems);
+        setTotal(data?.pagination?.number_of_items ?? nextItems.length);
+        setPage(p);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Failed to load users");
         setItems([]);
-        return;
+        setTotal(0);
+      } finally {
+        setLoading(false);
       }
-      setItems(Array.isArray(data?.items) ? data.items : []);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to load users");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [agencyId]);
+    },
+    [agencyId, pageSize],
+  );
 
   useEffect(() => {
-    load();
-  }, [load, refreshKey]);
+    setPage(1);
+    load(1);
+  }, [agencyId, refreshKey, load]);
 
   return (
     <Card padding="none" className="overflow-hidden py-6">
@@ -64,6 +81,14 @@ export default function AgencyUsersTab({
         data={loading ? [] : items}
         emptyMessage={loading ? t("loading") : t("noData")}
       />
+      {!loading && items.length > 0 && (
+        <Pagination
+          page={page}
+          pageSize={pageSize || 10}
+          total={total}
+          onPageChange={(next) => load(next)}
+        />
+      )}
     </Card>
   );
 }

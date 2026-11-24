@@ -51,7 +51,9 @@ async def _delete_application(session, admin: KeycloakAdmin, application: Applic
             if client_uuid:
                 await admin.delete_client(http, realm, client_uuid)
             if application.application_type == ApplicationType.AGENT.value:
-                group_id = await admin.find_group_id(http, admin._settings.agent_realm, application.application_mnemonic)
+                group_id = await admin.find_group_id(
+                    http, admin._settings.agent_realm, application.application_mnemonic
+                )
                 if group_id:
                     await admin.delete_group(http, admin._settings.agent_realm, group_id)
     except KeycloakAdminError as exc:
@@ -74,7 +76,9 @@ async def _delete_application(session, admin: KeycloakAdmin, application: Applic
         await session.execute(delete(Role).where(Role.id.in_(role_ids)))
     if permission_ids:
         await session.execute(delete(RolePermission).where(RolePermission.permission_id.in_(permission_ids)))
-        await session.execute(delete(ApplicationPermission).where(ApplicationPermission.id.in_(permission_ids)))
+        await session.execute(
+            delete(ApplicationPermission).where(ApplicationPermission.id.in_(permission_ids))
+        )
     await session.execute(delete(DataPolicy).where(DataPolicy.application_id == application.id))
     await session.delete(application)
     await session.flush()
