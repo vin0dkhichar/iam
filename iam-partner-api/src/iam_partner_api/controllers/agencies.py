@@ -5,10 +5,12 @@ from openg2p_fastapi_common.context import get_async_session_maker
 from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
-from iam_core.helpers.agency import AGENCY_ADMIN_ROLE, AGENT_WEB_CLIENT
+from iam_core.helpers.agency import admin_keycloak_clients
 from iam_core.models.enum import ApplicationType, SyncStatus
 from iam_core.services.agency_service import AgencyService
+from iam_core.services.data_policy_service import DataPolicyService
 from iam_core.services.user_service import UserService
+from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX
 
 from ..helpers.request_body import partner_payload
 from ..helpers.signature import require_partner_signature
@@ -54,6 +56,15 @@ class PartnerAgenciesController(BaseController):
                 raise BadRequestError(message="Agency does not exist")
             if agency.group_status != SyncStatus.SYNCED.value:
                 raise BadRequestError(message="Agency group is not ready yet")
+            # Agency admins inherit all AGC_ policies on the agency client.
+            policies = await DataPolicyService().policies_for_agency(session, body.agency_id)
+            agc_roles = sorted(
+                {
+                    policy.policy_mnemonic
+                    for policy in policies
+                    if str(policy.policy_mnemonic).startswith(AGC_ROLE_PREFIX)
+                }
+            )
             user = await self._users.create_user(
                 session,
                 realm=ApplicationType.AGENT.value,
@@ -61,7 +72,8 @@ class PartnerAgenciesController(BaseController):
                 first_name=body.first_name,
                 last_name=body.last_name,
                 agency_id=body.agency_id,
-                keycloak_clients=[{"client_id": AGENT_WEB_CLIENT, "roles": [AGENCY_ADMIN_ROLE]}],
+                # keycloak_clients=[{"client_id": AGENT_WEB_CLIENT, "roles": [AGENCY_ADMIN_ROLE]}],
+                keycloak_clients=admin_keycloak_clients(body.agency_id, agc_roles),
             )
             await session.commit()
             user_id = user.id

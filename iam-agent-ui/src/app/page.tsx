@@ -1,11 +1,19 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "react-toastify";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/Auth";
 import Pagination from "@/components/Pagination";
+import { CustomDropdown, ViewDataPolicyModal } from "@/features/data-policy/components";
+import { useAgency, useAllRegister, type Register } from "@/features/data-policy/hooks";
+
+const POLICY_TARGETS = [
+  { label: "Register", value: "REGISTER_RECORD" },
+  { label: "Reference Data", value: "ATTRIBUTE" },
+  { label: "Administrative Areas", value: "GEO" },
+];
 
 function errorMessage(
   data: {
@@ -36,10 +44,10 @@ type AgentUser = {
   roles: string[];
 };
 
-type AgencyRole = {
-  role_mnemonic: string;
-  sync_status?: string | null;
-};
+// type AgencyRole = {
+//   role_mnemonic: string;
+//   sync_status?: string | null;
+// };
 
 type AgencyPolicy = {
   policy_id: string;
@@ -58,12 +66,13 @@ const emptyForm = {
   first_name: "",
   last_name: "",
   email: "",
-  roles: [] as string[],
+  // roles: [] as string[],
   policies: [] as string[],
 };
 
 function isPolicyRole(role: string) {
-  return role.startsWith("AGC_") || role.startsWith("DP_");
+  // return role.startsWith("AGC_") || role.startsWith("DP_");
+  return role.startsWith("AGC_") || role.startsWith("AGT_") || role.startsWith("DP_");
 }
 
 function isAgencyAdminRole(role: string) {
@@ -75,11 +84,13 @@ function StaffTable({
   rows,
   empty,
   footer,
+  onRowClick,
 }: {
   columns: string[];
-  rows: { key: string; cells: ReactNode[] }[];
+  rows: { key: string; cells: ReactNode[]; onClick?: () => void }[];
   empty: string;
   footer?: ReactNode;
+  onRowClick?: (key: string) => void;
 }) {
   return (
     <div className="overflow-hidden rounded-[10px] bg-white pb-6 pt-6 shadow-[0_1px_2px_rgba(6,19,39,0.05)]">
@@ -100,7 +111,11 @@ function StaffTable({
             </tr>
           ) : (
             rows.map((row, index) => (
-              <tr key={row.key} className={index % 2 === 1 ? "bg-white" : "bg-gray-50"}>
+              <tr
+                key={row.key}
+                className={`${index % 2 === 1 ? "bg-white" : "bg-gray-50"}${row.onClick || onRowClick ? " cursor-pointer hover:bg-[#F3F1E4]" : ""}`}
+                onClick={() => (row.onClick ? row.onClick() : onRowClick?.(row.key))}
+              >
                 {row.cells.map((cell, cellIndex) => (
                   <td key={cellIndex} className="px-9 py-4 align-middle text-[16px] text-black">
                     {cell}
@@ -127,13 +142,15 @@ const PAGE_SIZE = 10;
 
 export default function UsersPage() {
   const t = useTranslations();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { setDenied } = useAuth();
-  const menu = useSearchParams().get("menu") || "users";
+  const menu = searchParams.get("menu") || "users";
   const [users, setUsers] = useState<AgentUser[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [roleOptions, setRoleOptions] = useState<string[]>([]);
-  const [roles, setRoles] = useState<AgencyRole[]>([]);
+  // const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  // const [roles, setRoles] = useState<AgencyRole[]>([]);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<Mode>(null);
   const [selected, setSelected] = useState<AgentUser | null>(null);
@@ -141,6 +158,67 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [policies, setPolicies] = useState<AgencyPolicy[]>([]);
   const [viewPolicy, setViewPolicy] = useState<AgencyPolicy | null>(null);
+  const [policyTarget, setPolicyTarget] = useState(
+    searchParams.get("policyTarget") || "REGISTER_RECORD",
+  );
+  const [registerId, setRegisterId] = useState(searchParams.get("registerId") || "");
+  const { apiUrl: agencyApiUrl } = useAgency();
+  const { registers, loading: registersLoading } = useAllRegister(agencyApiUrl, 1, 100);
+
+  const agencyPolicies = useMemo(
+    () => policies.filter((policy) => policy.policy_mnemonic.startsWith("AGC_")),
+    [policies],
+  );
+  const agentPolicies = useMemo(() => {
+    return policies.filter((policy) => {
+      if (!policy.policy_mnemonic.startsWith("AGT_")) return false;
+      if (policy.policy_target !== policyTarget) return false;
+      if (policyTarget === "REGISTER_RECORD") {
+        return !registerId || policy.register_id === registerId;
+      }
+      return true;
+    });
+  }, [policies, policyTarget, registerId]);
+  // AGC_ applied by default on the API — only AGT_ is assignable in add/edit.
+  const assignablePolicies = useMemo(
+    () => policies.filter((policy) => policy.policy_mnemonic.startsWith("AGT_")),
+    [policies],
+  );
+  const registerOptions = useMemo(
+    () =>
+      (registers || []).map((register: Register) => ({
+        label: register.register_mnemonic || register.register_id,
+        value: register.register_id,
+      })),
+    [registers],
+  );
+  const isRegisterTarget = policyTarget === "REGISTER_RECORD";
+  const canListAgentPolicies =
+    policyTarget === "ATTRIBUTE" || policyTarget === "GEO" || !!registerId;
+
+  useEffect(() => {
+    if (!isRegisterTarget || registersLoading || !registers.length) return;
+    setRegisterId((prev) => {
+      if (prev && registers.some((register: Register) => register.register_id === prev)) {
+        return prev;
+      }
+      return registers[0]?.register_id || "";
+    });
+  }, [isRegisterTarget, registersLoading, registers]);
+
+  function updatePolicyFilters(nextTarget: string, nextRegisterId: string) {
+    setPolicyTarget(nextTarget);
+    setRegisterId(nextRegisterId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("menu", "agent-data-policies");
+    params.set("policyTarget", nextTarget);
+    if (nextTarget === "REGISTER_RECORD" && nextRegisterId) {
+      params.set("registerId", nextRegisterId);
+    } else {
+      params.delete("registerId");
+    }
+    router.replace(`/?${params.toString()}`, { scroll: false });
+  }
 
   async function loadUsers(nextPage = page) {
     const usersResponse = await fetch(
@@ -164,28 +242,31 @@ export default function UsersPage() {
   }
 
   async function load() {
-    const [usersOk, rolesResponse, policiesResponse] = await Promise.all([
+    // Roles load commented — roles menu removed.
+    // const [usersOk, rolesResponse, policiesResponse] = await Promise.all([
+    const [usersOk, policiesResponse] = await Promise.all([
       loadUsers(page),
-      fetch("/api/users/roles"),
+      // fetch("/api/users/roles"),
       fetch("/api/users/data-policies"),
     ]);
-    const rolesData = await rolesResponse.json();
+    // const rolesData = await rolesResponse.json();
     const policiesData = await policiesResponse.json();
-    const forbidden = [rolesResponse, policiesResponse].some((response) => response.status === 403);
+    // const forbidden = [rolesResponse, policiesResponse].some((response) => response.status === 403);
+    const forbidden = policiesResponse.status === 403;
     if (!usersOk || forbidden) {
       if (forbidden) setDenied(true);
       return;
     }
-    if (!rolesResponse.ok) toast.error(errorMessage(rolesData, t("loadFailed"), t("notAdmin")));
+    // if (!rolesResponse.ok) toast.error(errorMessage(rolesData, t("loadFailed"), t("notAdmin")));
     if (!policiesResponse.ok) toast.error(errorMessage(policiesData, t("loadFailed"), t("notAdmin")));
     setError("");
-    const nextRoles: AgencyRole[] = Array.isArray(rolesData.roles)
-      ? rolesData.roles.map((role: string | AgencyRole) =>
-          typeof role === "string" ? { role_mnemonic: role, sync_status: null } : role,
-        )
-      : [];
-    setRoles(nextRoles);
-    setRoleOptions(nextRoles.map((role) => role.role_mnemonic));
+    // const nextRoles: AgencyRole[] = Array.isArray(rolesData.roles)
+    //   ? rolesData.roles.map((role: string | AgencyRole) =>
+    //       typeof role === "string" ? { role_mnemonic: role, sync_status: null } : role,
+    //     )
+    //   : [];
+    // setRoles(nextRoles);
+    // setRoleOptions(nextRoles.map((role) => role.role_mnemonic));
     setPolicies(Array.isArray(policiesData.policies) ? policiesData.policies : []);
   }
 
@@ -195,6 +276,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     setMode(null);
+    setViewPolicy(null);
   }, [menu]);
 
   function openAdd() {
@@ -210,8 +292,10 @@ export default function UsersPage() {
       first_name: user.first_name,
       last_name: user.last_name,
       email: user.email,
-      roles: assigned.filter((role) => !isPolicyRole(role) && !isAgencyAdminRole(role)),
-      policies: assigned.filter(isPolicyRole),
+      // roles: assigned.filter((role) => !isPolicyRole(role) && !isAgencyAdminRole(role)),
+      // AGC_ inherited automatically — only AGT_ shown/edited in the form.
+      policies: assigned.filter((role) => role.startsWith("AGT_")),
+      // policies: assigned.filter(isPolicyRole),
     });
     setMode(nextMode);
   }
@@ -225,14 +309,14 @@ export default function UsersPage() {
     }));
   }
 
-  function toggleRole(role: string) {
-    setForm((current) => ({
-      ...current,
-      roles: current.roles.includes(role)
-        ? current.roles.filter((item) => item !== role)
-        : [...current.roles, role],
-    }));
-  }
+  // function toggleRole(role: string) {
+  //   setForm((current) => ({
+  //     ...current,
+  //     roles: current.roles.includes(role)
+  //       ? current.roles.filter((item) => item !== item)
+  //       : [...current.roles, role],
+  //   }));
+  // }
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -247,13 +331,18 @@ export default function UsersPage() {
                 first_name: form.first_name,
                 last_name: form.last_name,
                 email: form.email,
-                roles: [...form.roles, ...form.policies],
+                // roles: [...form.roles, ...form.policies],
+                roles: [...form.policies],
               }),
             })
           : await fetch("/api/users/roles", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ user_id: selected?.id, roles: [...form.roles, ...form.policies] }),
+              body: JSON.stringify({
+                user_id: selected?.id,
+                // roles: [...form.roles, ...form.policies],
+                roles: [...form.policies],
+              }),
             });
       const data = await response.json();
       if (!response.ok) {
@@ -295,18 +384,83 @@ export default function UsersPage() {
     }
   }
 
+  async function removeAgentPolicy(policy: AgencyPolicy) {
+    const response = await fetch("/api/users/data-policies/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ policy_id: policy.policy_id }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      toast.error(errorMessage(data, t("deleteFailed"), t("notAdmin")));
+      return;
+    }
+    toast.success(t("policyDeleted"));
+    await load();
+  }
+
   const fieldClass = "w-full rounded-[10px] border border-(--color-grey) px-3 py-2 text-[16px] disabled:bg-(--color-light-grey)";
+
+  const pageTitle =
+    menu === "agency-data-policies"
+      ? t("navAgencyDataPolicies")
+      : menu === "agent-data-policies"
+        ? t("navAgentDataPolicies")
+        // : menu === "roles"
+        //   ? t("navRoles")
+        //   : menu === "data-policies"
+        //     ? t("navDataPolicies")
+        : t("title");
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between gap-4">
-        <h1 className="text-[24px] font-semibold text-black">
-          {menu === "roles" ? t("navRoles") : menu === "data-policies" ? t("navDataPolicies") : t("title")}
-        </h1>
+        <h1 className="text-[24px] font-semibold text-black">{pageTitle}</h1>
         {menu === "users" && (
-          <button type="button" className="rounded-[10px] bg-black px-4 py-2 text-[16px] font-medium text-white" onClick={openAdd}>
+          <button
+            type="button"
+            className="rounded-[10px] bg-(--color-accent) px-4 py-2 text-[16px] font-medium text-black transition-colors duration-150 hover:bg-(--color-accent-hover)"
+            onClick={openAdd}
+          >
             {t("add")}
           </button>
+        )}
+        {menu === "agent-data-policies" && (
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-48">
+              <CustomDropdown
+                options={POLICY_TARGETS}
+                value={policyTarget}
+                onChange={(value) => updatePolicyFilters(value, "")}
+                placeholder="Select Policy Type"
+              />
+            </div>
+            {isRegisterTarget && (
+              <div className="w-48">
+                <CustomDropdown
+                  options={registerOptions}
+                  value={registerId}
+                  onChange={(value) => updatePolicyFilters(policyTarget, value)}
+                  loading={registersLoading}
+                  placeholder={t("select_register")}
+                />
+              </div>
+            )}
+            <button
+              type="button"
+              className="rounded-[10px] bg-(--color-accent) px-4 py-2 text-[16px] font-medium text-black transition-colors duration-150 hover:bg-(--color-accent-hover) disabled:opacity-50"
+              disabled={!canListAgentPolicies}
+              onClick={() =>
+                router.push(
+                  `/data-policies/create?policyTarget=${policyTarget}${
+                    registerId ? `&registerId=${registerId}` : ""
+                  }`,
+                )
+              }
+            >
+              {t("add")}
+            </button>
+          </div>
         )}
       </div>
       {error && (
@@ -314,6 +468,8 @@ export default function UsersPage() {
           {error}
         </p>
       )}
+
+      {/* Roles menu commented out.
       {menu === "roles" && (
         <StaffTable
           columns={[t("role"), t("status")]}
@@ -324,34 +480,85 @@ export default function UsersPage() {
           }))}
         />
       )}
-      {menu === "data-policies" && (
-        <StaffTable
-          columns={[t("name"), t("policyTarget"), t("policyType"), t("status"), t("actions")]}
-          empty={t("noDataPolicies")}
-          rows={policies.map((policy) => ({
-            key: policy.policy_id || policy.policy_mnemonic + policy.policy_target,
-            cells: [
-              policy.policy_mnemonic,
-              policy.policy_target,
-              policy.policy_type,
-              statusLabel(t, policy.sync_status),
-              <button key="view" type="button" className="rounded-[10px] bg-[#e1e1e1] px-4 py-2 text-[16px] font-medium text-black/50" onClick={() => setViewPolicy(policy)}>{t("view")}</button>,
-            ],
-          }))}
-        />
+      */}
+
+      {/* Combined data-policies menu replaced by agency / agent split.
+      {menu === "data-policies" && (...)}
+      */}
+
+      {menu === "agency-data-policies" && (
+        <>
+          <p className="mb-4 text-[14px] text-gray-600">{t("agcReadOnlyHint")}</p>
+          <StaffTable
+            columns={[t("name"), t("policyTarget"), t("policyType"), t("keycloakClientStatus")]}
+            empty={t("noAgencyDataPolicies")}
+            rows={agencyPolicies.map((policy) => ({
+              key: policy.policy_id || policy.policy_mnemonic + policy.policy_target,
+              onClick: () => setViewPolicy(policy),
+              cells: [
+                policy.policy_mnemonic,
+                policy.policy_target,
+                policy.policy_type,
+                statusLabel(t, policy.sync_status),
+                // View button removed — row click opens view.
+                // <button ...>{t("view")}</button>,
+              ],
+            }))}
+          />
+        </>
       )}
+
+      {menu === "agent-data-policies" && (
+        <>
+          {!canListAgentPolicies ? (
+            <p className="rounded-[10px] bg-white px-9 py-8 text-center text-[16px] text-gray-500">
+              {t("select_register_for_filter_fields")}
+            </p>
+          ) : (
+            <StaffTable
+              columns={[t("name"), t("policyTarget"), t("policyType"), t("keycloakClientStatus"), t("actions")]}
+              empty={t("noAgentDataPolicies")}
+              rows={agentPolicies.map((policy) => ({
+                key: policy.policy_id || policy.policy_mnemonic + policy.policy_target,
+                onClick: () => setViewPolicy(policy),
+                cells: [
+                  policy.policy_mnemonic,
+                  policy.policy_target,
+                  policy.policy_type,
+                  statusLabel(t, policy.sync_status),
+                  <button
+                    key="delete"
+                    type="button"
+                    className="rounded-[10px] bg-[rgba(192,57,43,0.1)] px-4 py-2 text-[16px] font-medium text-[#c0392b]"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeAgentPolicy(policy);
+                    }}
+                  >
+                    {t("delete")}
+                  </button>,
+                ],
+              }))}
+            />
+          )}
+        </>
+      )}
+
       {menu === "users" && (
         <StaffTable
-          columns={[t("name"), t("email"), t("status"), t("actions")]}
+          columns={[t("name"), t("email"), t("keycloakUserStatus"), t("actions")]}
           empty={t("noUsers")}
           rows={users.map((user) => ({
             key: user.id,
+            onClick: () => openUser("view", user),
             cells: [
               `${user.first_name} ${user.last_name}`,
               user.email,
               statusLabel(t, user.sync_status),
-              <div key="actions" className="flex gap-2">
+              <div key="actions" className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+                {/* View button removed — row click opens view.
                 <button type="button" className="rounded-[10px] bg-[#e1e1e1] px-4 py-2 text-[16px] font-medium text-black/50" onClick={() => openUser("view", user)}>{t("view")}</button>
+                */}
                 <button type="button" className="rounded-[10px] bg-black px-4 py-2 text-[16px] font-medium text-white" onClick={() => openUser("edit", user)}>{t("edit")}</button>
                 <button type="button" className="rounded-[10px] bg-[rgba(192,57,43,0.1)] px-4 py-2 text-[16px] font-medium text-[#c0392b]" onClick={() => openUser("delete", user)}>{t("delete")}</button>
               </div>,
@@ -371,39 +578,7 @@ export default function UsersPage() {
       )}
 
       {viewPolicy && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setViewPolicy(null)}>
-          <div className="max-h-[80vh] w-full max-w-200 overflow-y-auto rounded-[10px] border-4 border-[#EABB13] bg-white p-8 shadow-lg" onClick={(event) => event.stopPropagation()} role="dialog">
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-[22px] font-bold text-[#ED7C22]">{t("viewPolicy")}</h2>
-              <button type="button" className="text-[28px] leading-none text-gray-500" onClick={() => setViewPolicy(null)}>×</button>
-            </div>
-            <div className="grid gap-4 text-[16px]">
-              {[
-                [t("policyMnemonic"), viewPolicy.policy_mnemonic],
-                [t("policyTarget"), viewPolicy.policy_target],
-                [t("policyType"), viewPolicy.policy_type],
-                [t("policyId"), viewPolicy.policy_id],
-                [t("status"), statusLabel(t, viewPolicy.sync_status)],
-                ...(viewPolicy.register_id ? [[t("registerId"), viewPolicy.register_id]] : []),
-              ].map(([label, value]) => (
-                <div key={label} className="grid grid-cols-[1.2fr_2fr] gap-4">
-                  <span className="font-medium text-gray-500">{label}</span>
-                  <span className="break-all text-black">{value || "—"}</span>
-                </div>
-              ))}
-              <div>
-                <p className="mb-2 font-medium text-gray-500">{t("policyDescription")}</p>
-                <div className="rounded-[10px] border border-gray-200 bg-gray-50 px-4 py-2">{viewPolicy.policy_description || "—"}</div>
-              </div>
-              <div>
-                <p className="mb-2 font-medium text-gray-500">{t("policyFilter")}</p>
-                <pre className="overflow-auto whitespace-pre-wrap rounded-[10px] border border-gray-200 bg-gray-50 px-4 py-2 font-mono text-[14px]">
-                  {JSON.stringify(viewPolicy.policy_filter_expression ?? {}, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ViewDataPolicyModal data={viewPolicy} onClose={() => setViewPolicy(null)} />
       )}
 
       {mode && (
@@ -450,27 +625,38 @@ export default function UsersPage() {
                     {t("email")}
                     <input className={fieldClass} type="email" value={form.email} disabled />
                   </label>
-                  <pre className="overflow-auto rounded-[10px] bg-[#F3F1E4] p-4 text-[14px]">
-                    {JSON.stringify({ roles: form.roles, data_policies: form.policies }, null, 2)}
-                  </pre>
+                  <div className="grid gap-4">
+                    <div>
+                      <p className="mb-2 text-[16px] font-medium">{t("navAgencyDataPolicies")}</p>
+                      <pre className="overflow-auto rounded-[10px] bg-[#F3F1E4] p-4 text-[14px]">
+                        {JSON.stringify(
+                          (selected?.roles || []).filter((role) => role.startsWith("AGC_")),
+                          null,
+                          2,
+                        )}
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="mb-2 text-[16px] font-medium">{t("navAgentDataPolicies")}</p>
+                      <pre className="overflow-auto rounded-[10px] bg-[#F3F1E4] p-4 text-[14px]">
+                        {JSON.stringify(form.policies, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
                 </>
               )}
               {mode !== "view" && mode !== "delete" && (
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid gap-6">
+                  {/* Roles removed from agent add/edit.
                   <fieldset className="grid content-start gap-2">
                     <legend className="text-[16px] font-medium">{t("roles")}</legend>
-                    {roleOptions.length === 0 && <p className="text-black/60">{t("noRoles")}</p>}
-                    {roleOptions.map((role) => (
-                      <label key={role} className="flex items-center gap-2 text-[16px]">
-                        <input type="checkbox" checked={form.roles.includes(role)} onChange={() => toggleRole(role)} />
-                        {role}
-                      </label>
-                    ))}
+                    ...
                   </fieldset>
+                  */}
                   <fieldset className="grid content-start gap-2">
-                    <legend className="text-[16px] font-medium">{t("dataPolicies")}</legend>
-                    {policies.length === 0 && <p className="text-black/60">{t("noDataPolicies")}</p>}
-                    {policies.map((policy) => (
+                    <legend className="text-[16px] font-medium">{t("navAgentDataPolicies")}</legend>
+                    {assignablePolicies.length === 0 && <p className="text-black/60">{t("noAgentDataPolicies")}</p>}
+                    {assignablePolicies.map((policy) => (
                       <label key={policy.policy_mnemonic} className="flex items-center gap-2 text-[16px]">
                         <input
                           type="checkbox"

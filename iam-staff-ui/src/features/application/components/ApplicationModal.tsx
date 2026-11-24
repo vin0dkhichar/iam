@@ -55,14 +55,16 @@ export default function ApplicationModal({
       <form onSubmit={onSave}>
         <div className="grid grid-cols-2 gap-4">
           <InputField
-            label={isAgent ? t("agencyId") : t("mnemonic")}
+            label={t("mnemonic")}
+            // label={isAgent ? t("agencyId") : t("mnemonic")}
             value={form.application_mnemonic}
             onChange={(value) => onChange("application_mnemonic", value)}
             className="col-span-full"
             required
           />
           <TextAreaField
-            label={isAgent ? t("agencyName") : t("description")}
+            label={t("description")}
+            // label={isAgent ? t("agencyName") : t("description")}
             value={form.application_description}
             onChange={(value) => onChange("application_description", value)}
             className="col-span-full"

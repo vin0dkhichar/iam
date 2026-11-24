@@ -11,6 +11,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.user_auth.helpers.data_policy_role_helper import (
     AGC_ROLE_PREFIX,
+    AGT_ROLE_PREFIX,
     DP_ROLE_PREFIX,
 )
 
@@ -21,6 +22,7 @@ STATE_KEY_DATA_POLICIES = "data_policies"
 
 __all__ = [
     "AGC_ROLE_PREFIX",
+    "AGT_ROLE_PREFIX",
     "DP_ROLE_PREFIX",
     "STATE_KEY_DATA_POLICIES",
     "STATE_KEY_DATA_POLICY_MNEMONICS",
@@ -29,9 +31,9 @@ __all__ = [
 
 
 class DataPolicyMiddleware(BaseHTTPMiddleware):
-    """Read policy roles off every client on the token. The prefix selects them.
+    """Read policy roles off every client on the token. Prefix(es) select them.
 
-    Staff passes ``DP_``. An agency passes ``AGC_``.
+    Staff passes ``DP_``. Agency agent portal passes ``AGC_`` and ``AGT_``.
     """
 
     def __init__(
@@ -40,6 +42,7 @@ class DataPolicyMiddleware(BaseHTTPMiddleware):
         *,
         iam_api_url: str,
         role_prefix: str = DP_ROLE_PREFIX,
+        role_prefixes: list[str] | tuple[str, ...] | None = None,
         mnemonics_state_key: str = STATE_KEY_DATA_POLICY_MNEMONICS,
         policies_state_key: str = STATE_KEY_DATA_POLICIES,
         auth_state_key: str = "auth",
@@ -47,13 +50,15 @@ class DataPolicyMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.iam_api_url = iam_api_url
         self.role_prefix = role_prefix
+        self.role_prefixes = tuple(
+            p.upper() for p in (role_prefixes if role_prefixes is not None else (role_prefix,))
+        )
         self.mnemonics_state_key = mnemonics_state_key
         self.policies_state_key = policies_state_key
         self.auth_state_key = auth_state_key
 
     def _clients_for_request(self, client_roles: dict) -> tuple[list[dict], list[str]]:
-        """Keep roles with this prefix, grouped by the client they came from."""
-        prefix = self.role_prefix.upper()
+        """Keep roles with any configured prefix, grouped by the client they came from."""
         clients: list[dict] = []
         role_names: list[str] = []
         seen: set[str] = set()
@@ -61,7 +66,8 @@ class DataPolicyMiddleware(BaseHTTPMiddleware):
             mnemonics: list[str] = []
             for role in roles or []:
                 text = str(role).strip()
-                if not text.upper().startswith(prefix):
+                upper = text.upper()
+                if not any(upper.startswith(prefix) for prefix in self.role_prefixes):
                     continue
                 mnemonics.append(text)
                 if text not in seen:

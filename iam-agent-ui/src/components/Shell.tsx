@@ -2,19 +2,24 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/Auth";
 
 export default function Shell({ children }: { children: ReactNode }) {
   const t = useTranslations();
   const { user, logout, denied } = useAuth();
   const router = useRouter();
-  const menu = useSearchParams().get("menu") || "users";
+  const pathname = usePathname() || "";
+  const menuParam = useSearchParams().get("menu") || "users";
+  const menu = pathname.startsWith("/data-policies") ? "agent-data-policies" : menuParam;
   const displayName = user?.name || user?.preferred_username || user?.email || user?.sub || "";
   const items = [
-    { id: "users", label: t("navUsers") },
-    { id: "roles", label: t("navRoles") },
-    { id: "data-policies", label: t("navDataPolicies") },
+    { id: "users", label: t("navAgents") },
+    // Roles menu removed from agent UI.
+    // { id: "roles", label: t("navRoles") },
+    // { id: "data-policies", label: t("navDataPolicies") },
+    { id: "agency-data-policies", label: t("navAgencyDataPolicies") },
+    { id: "agent-data-policies", label: t("navAgentDataPolicies") },
   ];
 
   if (denied) {

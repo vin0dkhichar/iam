@@ -73,6 +73,36 @@ class AgencyPoliciesResponse(BaseModel):
     policies: list[AgencyPolicyItem]
 
 
+class AddAgentPolicyBody(BaseModel):
+    policy_mnemonic: str
+    policy_description: str | None = None
+    policy_type: str = "ALLOW"
+    policy_target: str = "ATTRIBUTE"
+    register_id: str | None = None
+    policy_filter_expression: dict | None = None
+
+
+class RemoveAgentPolicyBody(BaseModel):
+    policy_id: str
+
+
+class AddAgentPolicyResponse(BaseModel):
+    policy_id: str
+    policy_mnemonic: str
+    sync_status: str | None = None
+
+
+class RemoveAgentPolicyResponse(BaseModel):
+    policy_id: str
+
+
 class AssignRolesResponse(BaseModel):
     user_id: str
     roles: list[str]
+
+
+class AgencyResponse(BaseModel):
+    agency_id: str
+    name: str | None = None
+    # Registry staff API base URL for REGISTER_RECORD policy field pickers (same as staff app.api_url).
+    api_url: str | None = None

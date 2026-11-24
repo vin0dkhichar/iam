@@ -8,6 +8,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from iam_core.helpers.agency import merge_agency_client_roles, with_inherited_agc_roles
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.user import User
 
@@ -19,6 +20,13 @@ def _normalize_email(email: str) -> str:
     if not _EMAIL.match(cleaned):
         raise BadRequestError(message="A valid email is required")
     return cleaned
+
+
+def _agency_client_roles(user: User, agency_id: str) -> list[str]:
+    for entry in user.keycloak_clients or []:
+        if entry.get("client_id") == agency_id:
+            return [role for role in (entry.get("roles") or []) if role]
+    return []
 
 
 class UserService:
@@ -92,3 +100,35 @@ class UserService:
             .limit(page_size)
         )
         return list(rows), total
+
+    async def refresh_inherited_agc_roles(
+        self,
+        session: AsyncSession,
+        *,
+        agency_id: str,
+        agc_roles: list[str],
+    ) -> None:
+        """Rewrite AGC_ on every active agency user and queue Keycloak UPDATE_ROLES."""
+        users = (
+            await session.scalars(
+                select(User).where(
+                    User.realm == ApplicationType.AGENT.value,
+                    User.agency_id == agency_id,
+                    User.active.is_(True),
+                )
+            )
+        ).all()
+        for user in users:
+            if user.sync_action == SyncAction.DELETE.value:
+                continue
+            roles = with_inherited_agc_roles(_agency_client_roles(user, agency_id), agc_roles)
+            user.keycloak_clients = merge_agency_client_roles(user.keycloak_clients, agency_id, roles)
+            if (
+                user.sync_action == SyncAction.CREATE.value
+                and user.sync_status in {SyncStatus.PENDING.value, SyncStatus.SYNCING.value}
+                and not user.keycloak_user_id
+            ):
+                # CREATE provision will apply the updated keycloak_clients.
+                continue
+            user.sync_action = SyncAction.UPDATE_ROLES.value
+            user.sync_status = SyncStatus.PENDING.value

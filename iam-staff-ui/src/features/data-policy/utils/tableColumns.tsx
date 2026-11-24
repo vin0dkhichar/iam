@@ -32,7 +32,8 @@ export function getDataPolicyColumns(
     },
     {
       key: "status",
-      header: t("status"),
+      header: t("clientStatus"),
+      // header: t("status"),
       render: (dp: DataPolicy) => (
         <span title={dp.sync_error || undefined}>{statusLabel(t, dp.sync_status)}</span>
       ),

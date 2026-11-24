@@ -89,9 +89,7 @@ class TokenValidatorService(BaseService):
         login_provider = await self._get_login_provider_db_by_iss(iss)
         if not login_provider:
             raise UnauthorizedError(message=f"Unauthorized. Unknown Issuer. {iss}")
-        provider_type = getattr(login_provider, "application_type", None)
-        if application_type is not None and provider_type != application_type:
-            raise UnauthorizedError(message=f"Unauthorized. Unknown Issuer. {iss}")
+        # application_type is kept for callers but not used to filter LPs (issuer match only).
 
         self._validate_iss_aud(unverified_payload, login_provider)
         adapter = self._adapters.resolve_for_provider(login_provider)

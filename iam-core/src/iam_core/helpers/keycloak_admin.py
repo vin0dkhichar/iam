@@ -278,6 +278,40 @@ class KeycloakAdmin:
                 return row["id"]
         return None
 
+    async def get_user_client_roles(
+        self,
+        client: httpx.AsyncClient,
+        realm: str,
+        user_id: str,
+        client_uuid: str,
+    ) -> list[dict]:
+        response = await self._request(
+            client,
+            "GET",
+            realm,
+            f"/users/{user_id}/role-mappings/clients/{client_uuid}",
+        )
+        return list(response.json() or [])
+
+    async def remove_client_roles_from_user(
+        self,
+        client: httpx.AsyncClient,
+        realm: str,
+        user_id: str,
+        client_uuid: str,
+        roles: list[dict],
+    ) -> None:
+        if not roles:
+            return
+        await self._request(
+            client,
+            "DELETE",
+            realm,
+            f"/users/{user_id}/role-mappings/clients/{client_uuid}",
+            json_body=roles,
+            expected=(204, 404),
+        )
+
     async def assign_client_roles_to_user(
         self,
         client: httpx.AsyncClient,
@@ -286,10 +320,16 @@ class KeycloakAdmin:
         client_uuid: str,
         role_names: list[str],
     ) -> None:
-        if not role_names:
+        """Replace the user's client roles so Keycloak matches ``role_names`` exactly."""
+        desired = sorted({name.strip() for name in role_names if name and name.strip()})
+        current = await self.get_user_client_roles(client, realm, user_id, client_uuid)
+        current_by_name = {row.get("name"): row for row in current if row.get("name")}
+        to_remove = [row for name, row in current_by_name.items() if name not in desired]
+        await self.remove_client_roles_from_user(client, realm, user_id, client_uuid, to_remove)
+        if not desired:
             return
         roles = []
-        for name in role_names:
+        for name in desired:
             response = await self._request(
                 client,
                 "GET",

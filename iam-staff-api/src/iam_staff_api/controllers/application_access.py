@@ -73,18 +73,19 @@ class ApplicationAccessController(BaseController):
             responses={200: {"model": PermissionsResponse}},
             methods=["POST"],
         )
-        self.router.add_api_route(
-            "/create_permission",
-            self.create_permission,
-            responses={200: {"model": PermissionResponse}},
-            methods=["POST"],
-        )
-        self.router.add_api_route(
-            "/delete_permission",
-            self.delete_permission,
-            responses={200: {"model": PermissionResponse}},
-            methods=["POST"],
-        )
+        # Permissions: create/delete removed from staff UI (view only).
+        # self.router.add_api_route(
+        #     "/create_permission",
+        #     self.create_permission,
+        #     responses={200: {"model": PermissionResponse}},
+        #     methods=["POST"],
+        # )
+        # self.router.add_api_route(
+        #     "/delete_permission",
+        #     self.delete_permission,
+        #     responses={200: {"model": PermissionResponse}},
+        #     methods=["POST"],
+        # )
         self.router.add_api_route(
             "/get_role_permissions",
             self.get_role_permissions,

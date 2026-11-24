@@ -40,3 +40,12 @@ class AgencyService:
                 Application.active.is_(True),
             )
         )
+
+    async def set_active(self, session: AsyncSession, *, application_id: int, active: bool) -> Application:
+        """Soft-delete / restore an agency. DB active flag only — no Keycloak sync."""
+        agency = await session.get(Application, application_id)
+        if agency is None or agency.application_type != ApplicationType.AGENT.value:
+            raise BadRequestError(message="Agency not found")
+        agency.active = bool(active)
+        await session.flush()
+        return agency

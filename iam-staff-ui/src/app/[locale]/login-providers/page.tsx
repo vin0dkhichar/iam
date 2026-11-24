@@ -6,26 +6,26 @@ import { useRouter } from "@/i18n/navigation";
 import { useFetch } from "@/shared/hooks/useFetch";
 import { toast } from "react-toastify";
 import {
-  AddButton,
-  Can,
-  ConfirmModal,
+  // AddButton,
+  // Can,
+  // ConfirmModal,
   ErrorAlert,
   Pagination,
   Table,
   TableSkeleton,
 } from "@/components";
-import { LoginProviderModal, emptyLoginProviderForm } from "@/features/login-providers/components";
+// import { LoginProviderModal, emptyLoginProviderForm } from "@/features/login-providers/components";
 import { getLoginProviderColumns } from "@/features/login-providers/utils/loginProviderTableColumns";
 import { useConfig } from "@/context/ConfigContext";
 
-const AUTH_METHODS = [
-  "client_secret_post",
-  "client_secret_basic",
-  "private_key_jwt",
-  "private_key_jwt_keymanager",
-] as const;
+// const AUTH_METHODS = [
+//   "client_secret_post",
+//   "client_secret_basic",
+//   "private_key_jwt",
+//   "private_key_jwt_keymanager",
+// ] as const;
 
-const emptyForm = emptyLoginProviderForm;
+// const emptyForm = emptyLoginProviderForm;
 
 interface LoginProvider {
   id: number;
@@ -54,12 +54,13 @@ export default function LoginProvidersPage() {
   const [loading, setLoading] = useState(true);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<LoginProvider | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // Login providers: add/delete disabled — edit via detail page only.
+  // const [modalOpen, setModalOpen] = useState(false);
+  // const [form, setForm] = useState(emptyForm);
+  // const [saving, setSaving] = useState(false);
+  // const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  // const [itemToDelete, setItemToDelete] = useState<LoginProvider | null>(null);
+  // const [deleting, setDeleting] = useState(false);
   const loadSeq = useRef(0);
 
   const load = useCallback(
@@ -114,110 +115,112 @@ export default function LoginProvidersPage() {
   }, [page]);
 
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const payload: Record<string, unknown> = {
-        application_type: form.application_type || "staff",
-        provider_name: form.provider_name.trim(),
-        description: form.description || null,
-        client_id: form.client_id.trim(),
-        token_endpoint_auth_method: form.token_endpoint_auth_method,
-        issuer: form.issuer.trim(),
-        oauth_callback_url: form.oauth_callback_url.trim(),
-        authorization_endpoint: form.authorization_endpoint || null,
-        token_endpoint: form.token_endpoint || null,
-        userinfo_endpoint: form.userinfo_endpoint || null,
-        server_metadata_url: form.server_metadata_url || null,
-        jwks_uri: form.jwks_uri || null,
-        default_redirect_uri: form.default_redirect_uri || null,
-        scope: form.scope || null,
-        enable_pkce: form.enable_pkce,
-        adapter_name: form.adapter_name || null,
-        extra_authorize_params: form.extra_authorize_params || null,
-        jwt_assertion_aud: form.jwt_assertion_aud || null,
-        audiences: form.audiences || null,
-      };
-      if (form.icon_base64) payload.icon_base64 = form.icon_base64;
-      if (form.client_secret) payload.client_secret = form.client_secret;
-      if (form.client_private_key)
-        payload.client_private_key = form.client_private_key;
+  // async function handleCreate(e: React.FormEvent) {
+  //   e.preventDefault();
+  //   setSaving(true);
+  //   setError(null);
+  //   try {
+  //     const payload: Record<string, unknown> = {
+  //       application_type: form.application_type || "staff",
+  //       provider_name: form.provider_name.trim(),
+  //       description: form.description || null,
+  //       client_id: form.client_id.trim(),
+  //       token_endpoint_auth_method: form.token_endpoint_auth_method,
+  //       issuer: form.issuer.trim(),
+  //       oauth_callback_url: form.oauth_callback_url.trim(),
+  //       authorization_endpoint: form.authorization_endpoint || null,
+  //       token_endpoint: form.token_endpoint || null,
+  //       userinfo_endpoint: form.userinfo_endpoint || null,
+  //       server_metadata_url: form.server_metadata_url || null,
+  //       jwks_uri: form.jwks_uri || null,
+  //       default_redirect_uri: form.default_redirect_uri || null,
+  //       scope: form.scope || null,
+  //       enable_pkce: form.enable_pkce,
+  //       adapter_name: form.adapter_name || null,
+  //       extra_authorize_params: form.extra_authorize_params || null,
+  //       jwt_assertion_aud: form.jwt_assertion_aud || null,
+  //       audiences: form.audiences || null,
+  //     };
+  //     if (form.icon_base64) payload.icon_base64 = form.icon_base64;
+  //     if (form.client_secret) payload.client_secret = form.client_secret;
+  //     if (form.client_private_key)
+  //       payload.client_private_key = form.client_private_key;
+  //
+  //     const res = await execute("/api/login-providers/create", {
+  //       method: "POST",
+  //       body: JSON.stringify(payload),
+  //     });
+  //     if (res?.error) {
+  //       setError(res.error);
+  //       toast.error(res.error);
+  //       return;
+  //     }
+  //     setModalOpen(false);
+  //     setForm(emptyForm);
+  //     toast.success(t("loginProviderCreated"));
+  //     await load(page);
+  //   } catch (err) {
+  //     const errorMessage = err instanceof Error ? err.message : "Create failed";
+  //     setError(errorMessage);
+  //     toast.error(errorMessage);
+  //   } finally {
+  //     setSaving(false);
+  //   }
+  // }
 
-      const res = await execute("/api/login-providers/create", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-      if (res?.error) {
-        setError(res.error);
-        toast.error(res.error);
-        return;
-      }
-      setModalOpen(false);
-      setForm(emptyForm);
-      toast.success(t("loginProviderCreated"));
-      await load(page);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Create failed";
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setSaving(false);
-    }
-  }
+  // async function handleDelete() {
+  //   if (!itemToDelete) return;
+  //   setDeleting(true);
+  //   setError(null);
+  //   try {
+  //     const res = await execute("/api/login-providers/delete", {
+  //       method: "POST",
+  //       body: JSON.stringify({ id: itemToDelete.id }),
+  //     });
+  //     if (res?.error) {
+  //       setError(res.error);
+  //       toast.error(res.error);
+  //       return;
+  //     }
+  //     setDeleteModalOpen(false);
+  //     setItemToDelete(null);
+  //     await load(page);
+  //     toast.success(t("loginProviderDeleted"));
+  //   } catch (err) {
+  //     const errorMessage = err instanceof Error ? err.message : "Delete failed";
+  //     setError(errorMessage);
+  //     toast.error(errorMessage);
+  //   } finally {
+  //     setDeleting(false);
+  //   }
+  // }
 
-  async function handleDelete() {
-    if (!itemToDelete) return;
-    setDeleting(true);
-    setError(null);
-    try {
-      const res = await execute("/api/login-providers/delete", {
-        method: "POST",
-        body: JSON.stringify({ id: itemToDelete.id }),
-      });
-      if (res?.error) {
-        setError(res.error);
-        toast.error(res.error);
-        return;
-      }
-      setDeleteModalOpen(false);
-      setItemToDelete(null);
-      await load(page);
-      toast.success(t("loginProviderDeleted"));
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Delete failed";
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setDeleting(false);
-    }
-  }
-
-  function openDeleteModal(item: LoginProvider) {
-    setItemToDelete(item);
-    setDeleteModalOpen(true);
-  }
+  // function openDeleteModal(item: LoginProvider) {
+  //   setItemToDelete(item);
+  //   setDeleteModalOpen(true);
+  // }
 
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-6">
         <h1 className="font-semibold text-[24px] text-black">{t("loginProviders")}</h1>
-        <Can action="loginProvider:create">
+        {/* <Can action="loginProvider:create">
           <AddButton onClick={() => setModalOpen(true)} />
-        </Can>
+        </Can> */}
       </div>
 
       {error && <ErrorAlert>{error}</ErrorAlert>}
 
       <div className="bg-white rounded-[10px] py-6 shadow-sm">
         {loading || !loadedOnce ? (
-          <TableSkeleton rows={pageSize} headers={[t("name"), t("clientId"), t("issuer"), t("authMethod"), t("status"), t("actions")]} />
+          // previously also included t("status") / t("actions")
+          <TableSkeleton rows={pageSize} headers={[t("name"), t("clientId"), t("issuer")]} />
         ) : (
           <Table
-          columns={getLoginProviderColumns({ onDelete: openDeleteModal, t })}
-          data={items}
-          onRowClick={(lp) => router.push(`/login-providers/${lp.id}`)}
+            columns={getLoginProviderColumns({ onDelete: () => {}, t })}
+            // columns={getLoginProviderColumns({ onDelete: openDeleteModal, t })}
+            data={items}
+            onRowClick={(lp) => router.push(`/login-providers/${lp.id}`)}
             emptyMessage={t("noData")}
           />
         )}
@@ -231,7 +234,7 @@ export default function LoginProvidersPage() {
         )}
       </div>
 
-      {modalOpen && (
+      {/* {modalOpen && (
         <LoginProviderModal
           onClose={() => setModalOpen(false)}
           form={form}
@@ -252,7 +255,7 @@ export default function LoginProvidersPage() {
             setItemToDelete(null);
           }}
         />
-      )}
+      )} */}
     </div>
   );
 }

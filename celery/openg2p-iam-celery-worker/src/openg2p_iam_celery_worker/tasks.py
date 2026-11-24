@@ -9,7 +9,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.helpers.keycloak_admin import KeycloakAdmin, KeycloakAdminError
 from iam_core.helpers.keycloak_admin_config import ProvisioningSettings
-from iam_core.helpers.agency import AGENT_WEB_CLIENT
+from iam_core.helpers.agency import AGENT_APP_CLIENT, AGENT_PORTAL_CLIENT
 from iam_core.models.application import Application
 from iam_core.models.data_policy import DataPolicy
 from iam_core.models.application_permission import ApplicationPermission
@@ -146,16 +146,17 @@ async def provision_agency_group(session, admin: KeycloakAdmin, agency: Applicat
 
 
 async def _apply_client_roles(admin: KeycloakAdmin, user: User) -> None:
+    """Push each client_id's roles to Keycloak (replace, including empty clears)."""
     realm = keycloak_realm(user.realm, admin._settings)
     for entry in user.keycloak_clients or []:
-        roles = entry.get("roles") or []
-        if not roles:
+        client_id = entry.get("client_id")
+        if not client_id:
             continue
         await assign_client_roles(
             realm=realm,
-            client_id=entry["client_id"],
+            client_id=client_id,
             keycloak_user_id=user.keycloak_user_id,
-            role_names=roles,
+            role_names=entry.get("roles") or [],
         )
 
 
@@ -215,7 +216,9 @@ async def provision_user(session, admin: KeycloakAdmin, user: User) -> None:
             )
         user.keycloak_user_id = keycloak_id
         if group_id:
-            await admin.ensure_groups_claim(http, realm, AGENT_WEB_CLIENT)
+            # Groups claim on both agent OIDC clients so web + mobile tokens carry agency.
+            await admin.ensure_groups_claim(http, realm, AGENT_PORTAL_CLIENT)
+            await admin.ensure_groups_claim(http, realm, AGENT_APP_CLIENT)
             await admin.join_group(http, realm, keycloak_id, group_id)
         # Password email is off for now. The user is only created in Keycloak.
         # await admin.send_password_email(http, realm, keycloak_id)

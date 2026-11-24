@@ -77,6 +77,7 @@ class ApplicationAccessService(BaseService):
                     Role.active.is_(True),
                     ~Role.role_mnemonic.like("DP_%"),
                     ~Role.role_mnemonic.like("AGC_%"),
+                    ~Role.role_mnemonic.like("AGT_%"),
                 )
                 .order_by(Role.id.desc())
             )

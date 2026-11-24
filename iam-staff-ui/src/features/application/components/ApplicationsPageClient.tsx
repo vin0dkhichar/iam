@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/navigation";
 import { useFetch } from "@/shared/hooks/useFetch";
+import { withCsrfHeaders } from "@/shared/utils/csrf";
 import { toast } from "react-toastify";
 import {
   AddButton,
   Can,
-  ConfirmModal,
+  // ConfirmModal,
   ErrorAlert,
   Pagination,
   Table,
@@ -62,9 +63,10 @@ export default function ApplicationsPageClient({
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState<Application | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  // const [itemToDelete, setItemToDelete] = useState<Application | null>(null);
+  // const [deleting, setDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const loadSeq = useRef(0);
 
   const load = useCallback(
@@ -125,33 +127,40 @@ export default function ApplicationsPageClient({
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    // Staff Applications create disabled — only agencies create from this page.
+    if (!isAgent) return;
     setSaving(true);
     setError(null);
     try {
-      const creatingAgent = form.application_type === "agent";
-      const payload: Record<string, unknown> = {
-        application_mnemonic: form.application_mnemonic.trim(),
-        application_type: form.application_type || "staff",
-        application_description: form.application_description || null,
-        application_url: creatingAgent ? null : form.application_url || null,
-        api_url: creatingAgent ? null : form.api_url || null,
-      };
-      if (!creatingAgent && form.order !== "") payload.order = Number(form.order);
-      if (!creatingAgent && form.width !== "") payload.width = Number(form.width);
-      if (!creatingAgent && form.icon_base64) payload.icon_base64 = form.icon_base64;
-
-      const res = await execute("/api/applications/create", {
+      // Agencies use POST /agencies (not /applications/create_application).
+      const response = await fetch("/api/agencies", {
         method: "POST",
-        body: JSON.stringify(payload),
+        headers: withCsrfHeaders("POST", { "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({
+          agency_id: form.application_mnemonic.trim(),
+          name: form.application_description.trim(),
+        }),
       });
-      if (res?.error) {
-        setError(res.error);
-        toast.error(res.error);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          data?.detail || data?.error || data?.errors?.[0]?.message || "Create failed";
+        setError(message);
+        toast.error(message);
         return;
       }
+      // Previously (staff applications create via create_application):
+      // const payload: Record<string, unknown> = {
+      //   application_mnemonic: form.application_mnemonic.trim(),
+      //   application_type: form.application_type || "staff",
+      //   application_description: form.application_description || null,
+      //   ...
+      // };
+      // const res = await execute("/api/applications/create", { ... });
       setModalOpen(false);
       setForm({ ...emptyForm, application_type: kind });
-      toast.success(isAgent ? t("agencyCreated") : t("applicationCreated"));
+      toast.success(t("agencyCreated"));
       await load(page);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Create failed";
@@ -162,55 +171,105 @@ export default function ApplicationsPageClient({
     }
   }
 
-  async function handleDelete() {
-    if (!itemToDelete) return;
-    setDeleting(true);
+  // async function handleDelete() {
+  //   if (!itemToDelete) return;
+  //   setDeleting(true);
+  //   setError(null);
+  //   try {
+  //     const res = await execute("/api/applications/delete", {
+  //       method: "POST",
+  //       body: JSON.stringify({ id: itemToDelete.id }),
+  //     });
+  //     if (res?.error) {
+  //       setError(res.error);
+  //       toast.error(res.error);
+  //       return;
+  //     }
+  //     setDeleteModalOpen(false);
+  //     setItemToDelete(null);
+  //     await load(page);
+  //     toast.success(isAgent ? t("agencyDeleted") : t("applicationDeleted"));
+  //   } catch (err) {
+  //     const errorMessage = err instanceof Error ? err.message : "Delete failed";
+  //     setError(errorMessage);
+  //     toast.error(errorMessage);
+  //   } finally {
+  //     setDeleting(false);
+  //   }
+  // }
+
+  // function openDeleteModal(item: Application) {
+  //   setItemToDelete(item);
+  //   setDeleteModalOpen(true);
+  // }
+
+  async function handleToggleActive(app: Application) {
+    if (togglingId != null) return;
+    setTogglingId(app.id);
     setError(null);
     try {
-      const res = await execute("/api/applications/delete", {
+      // Agency soft-delete: flip active only via /agencies/set_active (no Keycloak).
+      const response = await fetch("/api/agencies/set-active", {
         method: "POST",
-        body: JSON.stringify({ id: itemToDelete.id }),
+        headers: withCsrfHeaders("POST", { "Content-Type": "application/json" }),
+        credentials: "include",
+        body: JSON.stringify({ id: app.id, active: app.active === false }),
       });
-      if (res?.error) {
-        setError(res.error);
-        toast.error(res.error);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          data?.detail || data?.error || data?.errors?.[0]?.message || "Status update failed";
+        setError(message);
+        toast.error(message);
         return;
       }
-      setDeleteModalOpen(false);
-      setItemToDelete(null);
+      toast.success(t("agencyStatusUpdated"));
       await load(page);
-      toast.success(isAgent ? t("agencyDeleted") : t("applicationDeleted"));
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Delete failed";
+      const errorMessage = err instanceof Error ? err.message : "Status update failed";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
-      setDeleting(false);
+      setTogglingId(null);
     }
   }
 
-  function openDeleteModal(item: Application) {
-    setItemToDelete(item);
-    setDeleteModalOpen(true);
-  }
+  const skeletonHeaders = isAgent
+    ? [t("mnemonic"), t("description"), t("clientStatus"), t("groupStatus"), t("status")]
+    : [t("mnemonic"), t("description"), t("url"), t("clientStatus")];
+    // staff previously: [t("mnemonic"), t("description"), t("url"), t("clientStatus"), t("status"), t("actions")]
 
   return (
     <div>
       <div className="flex items-center justify-between gap-4 mb-6">
         <h1 className="font-semibold text-[24px] text-black">{isAgent ? t("agencies") : t("applications")}</h1>
-        <Can action="application:create">
-          <AddButton onClick={() => { setForm({ ...emptyForm, application_type: kind }); setModalOpen(true); }} />
-        </Can>
+        {/* Staff Applications: add button removed from list view. Agencies keep create. */}
+        {isAgent ? (
+          <Can action="application:create">
+            <AddButton onClick={() => { setForm({ ...emptyForm, application_type: kind }); setModalOpen(true); }} />
+          </Can>
+        ) : (
+          // <Can action="application:create">
+          //   <AddButton onClick={() => { setForm({ ...emptyForm, application_type: kind }); setModalOpen(true); }} />
+          // </Can>
+          null
+        )}
       </div>
 
       {error && <ErrorAlert>{error}</ErrorAlert>}
 
       <div className="bg-white rounded-[10px] py-6 shadow-sm">
         {loading || !loadedOnce ? (
-          <TableSkeleton rows={pageSize} headers={isAgent ? [t("agencyId"), t("agencyName"), t("clientStatus"), t("groupStatus"), t("status"), t("actions")] : [t("mnemonic"), t("description"), t("url"), t("clientStatus"), t("status"), t("actions")]} />
+          <TableSkeleton rows={pageSize} headers={skeletonHeaders} />
         ) : (
           <Table
-            columns={getApplicationColumns({ onDelete: openDeleteModal, t, kind })}
+            columns={getApplicationColumns({
+              onDelete: () => {},
+              // onDelete: openDeleteModal,
+              onToggleActive: isAgent ? handleToggleActive : undefined,
+              t,
+              kind,
+            })}
             data={items}
             onRowClick={(app) => router.push(isAgent ? `/agencies/${app.id}` : `/applications/${app.id}`)}
             emptyMessage={t("noData")}
@@ -236,7 +295,7 @@ export default function ApplicationsPageClient({
         />
       )}
 
-      {deleteModalOpen && (
+      {/* {deleteModalOpen && (
         <ConfirmModal
           title={isAgent ? t("deleteAgency") : t("deleteApplication")}
           warningText={itemToDelete?.is_self_registered ? t("cannotDeleteSelfRegistered") : t("deleteWillRemoveAllData")}
@@ -247,7 +306,7 @@ export default function ApplicationsPageClient({
             setItemToDelete(null);
           }}
         />
-      )}
+      )} */}
     </div>
   );
 }

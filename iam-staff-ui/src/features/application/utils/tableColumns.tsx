@@ -34,7 +34,8 @@ export function getRoleColumns(
     },
     {
       key: "status",
-      header: t("status"),
+      header: t("clientStatus"),
+      // header: t("status"),
       render: (role: Role) => (
         <span title={role.sync_error || undefined}>{statusLabel(t, role.sync_status)}</span>
       ),
@@ -63,12 +64,13 @@ export function getPermissionColumns(
       header: t("description"),
       render: (perm: Permission) => perm.permission_description || "—",
     },
-    {
-      key: "actions",
-      header: t("actions"),
-      render: (perm: Permission) =>
-        createDeleteButton(() => onDelete(perm), "permission:delete", t),
-    },
+    // Permissions: add/delete removed from UI — view only.
+    // {
+    //   key: "actions",
+    //   header: t("actions"),
+    //   render: (perm: Permission) =>
+    //     createDeleteButton(() => onDelete(perm), "permission:delete", t),
+    // },
   ];
 }
 

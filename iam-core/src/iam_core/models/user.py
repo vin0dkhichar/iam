@@ -27,7 +27,7 @@ class User(BaseORMModelWithTimes):
     enabled: Mapped[str] = mapped_column(String, nullable=False, default="true")
     keycloak_user_id: Mapped[str | None] = mapped_column(String, nullable=True)
     # Clients and roles the worker must apply in Keycloak. Example:
-    # [{"client_id": "agent-web", "roles": ["AGENCY_ADMIN"]}]
+    # [{"client_id": "agent-portal", "roles": ["AGENCY_ADMIN"]}, {"client_id": "<agency_id>", "roles": ["AGC_…"]}]
     keycloak_clients: Mapped[list | None] = mapped_column(JSON, nullable=True)
     sync_action: Mapped[str] = mapped_column(String, nullable=False, default=SyncAction.CREATE.value)
     sync_status: Mapped[str] = mapped_column(String, nullable=False, default=SyncStatus.PENDING.value)

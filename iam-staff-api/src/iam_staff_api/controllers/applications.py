@@ -20,6 +20,7 @@ from ..schemas import (
     DeleteApplicationRequest,
     GetApplicationRequest,
     GetApplicationsRequest,
+    SetActiveApplicationRequest,
     UpdateApplicationRequest,
 )
 from ..services.applications_service import ApplicationsService
@@ -48,21 +49,30 @@ class ApplicationsController(BaseController):
             responses={200: {"model": ApplicationResponse}},
             methods=["POST"],
         )
-        self.router.add_api_route(
-            "/create_application",
-            self.create_application,
-            responses={200: {"model": ApplicationResponse}},
-            methods=["POST"],
-        )
+        # Staff Applications create removed from UI.
+        # Agencies use POST /agencies (AgenciesController), not create_application.
+        # self.router.add_api_route(
+        #     "/create_application",
+        #     self.create_application,
+        #     responses={200: {"model": ApplicationResponse}},
+        #     methods=["POST"],
+        # )
         self.router.add_api_route(
             "/update_application",
             self.update_application,
             responses={200: {"model": ApplicationResponse}},
             methods=["POST"],
         )
+        # List delete / cascade soft-delete removed from UI — use set_application_active instead.
+        # self.router.add_api_route(
+        #     "/delete_application",
+        #     self.delete_application,
+        #     responses={200: {"model": ApplicationResponse}},
+        #     methods=["POST"],
+        # )
         self.router.add_api_route(
-            "/delete_application",
-            self.delete_application,
+            "/set_application_active",
+            self.set_application_active,
             responses={200: {"model": ApplicationResponse}},
             methods=["POST"],
         )
@@ -142,10 +152,29 @@ class ApplicationsController(BaseController):
             _logger.exception("update_application failed")
             return self.helper.construct_error_response(error_exception, update_request)
 
+    @require_permissions({"application:edit"})
+    async def set_application_active(
+        self, set_active_request: SetActiveApplicationRequest
+    ) -> ApplicationResponse:
+        try:
+            application = await self.applications_service.set_application_active(
+                set_active_request.request_body.request_payload
+            )
+            return self.helper.construct_payload_response(
+                set_active_request,
+                application,
+                ApplicationResponseBody,
+                ApplicationResponse,
+            )
+        except Exception as error_exception:
+            _logger.exception("set_application_active failed")
+            return self.helper.construct_error_response(error_exception, set_active_request)
+
     @require_permissions({"application:delete"})
     async def delete_application(
         self, delete_request: DeleteApplicationRequest, request: Request
     ) -> ApplicationResponse:
+        # Route registration commented out — kept for possible re-enable.
         try:
             auth_token = bearer_from_request(request) or ""
             application = await self.applications_service.delete_application(

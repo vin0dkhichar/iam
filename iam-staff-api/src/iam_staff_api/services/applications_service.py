@@ -12,6 +12,7 @@ from ..schemas import (
     ApplicationData,
     ApplicationDeletePayload,
     ApplicationIdPayload,
+    ApplicationSetActivePayload,
     ApplicationUpdatePayload,
 )
 
@@ -43,10 +44,16 @@ class ApplicationsService(BaseService):
     ) -> tuple[list[ApplicationData], int]:
         async_session = get_async_session_maker()
         async with async_session() as session:
-            stmt = select(Application).where(
-                Application.application_type == (application_type or ApplicationType.STAFF.value),
-                Application.active.is_(True),
-            )
+            resolved_type = application_type or ApplicationType.STAFF.value
+            stmt = select(Application).where(Application.application_type == resolved_type)
+            # Agencies: include inactive so Active/Inactive soft-delete toggle works both ways.
+            # Staff applications: active-only list (status column removed from UI).
+            if resolved_type != ApplicationType.AGENT.value:
+                stmt = stmt.where(Application.active.is_(True))
+            # stmt = select(Application).where(
+            #     Application.application_type == (application_type or ApplicationType.STAFF.value),
+            #     Application.active.is_(True),
+            # )
             stmt = stmt.order_by(
                 Application.created_at.desc().nullslast(),
                 Application.id.desc(),
@@ -58,8 +65,13 @@ class ApplicationsService(BaseService):
         async_session = get_async_session_maker()
         async with async_session() as session:
             app = await session.get(Application, payload.id)
-            if app is None or not app.active:
+            if app is None:
                 raise NotFoundError(message="Application not found")
+            # Allow inactive agencies so soft-deleted rows remain openable from the list.
+            if not app.active and app.application_type != ApplicationType.AGENT.value:
+                raise NotFoundError(message="Application not found")
+            # if app is None or not app.active:
+            #     raise NotFoundError(message="Application not found")
             return self._to_data(app)
 
     async def create_application(self, payload: ApplicationCreatePayload) -> ApplicationData:
@@ -118,7 +130,7 @@ class ApplicationsService(BaseService):
                 "application_description",
                 "application_url",
                 "api_url",
-                "icon_base64",
+                # "icon_base64",  # icon changes disabled from staff UI
                 "order",
                 "width",
             ):
@@ -129,9 +141,29 @@ class ApplicationsService(BaseService):
             await session.refresh(app)
             return self._to_data(app)
 
+    async def set_application_active(self, payload: ApplicationSetActivePayload) -> ApplicationData:
+        """Soft-delete / restore by flipping active only — no Keycloak sync.
+
+        Prefer /agencies/set_active for agencies; this remains as a shared helper.
+        """
+        async_session = get_async_session_maker()
+        async with async_session() as session:
+            app = await session.get(Application, payload.id)
+            if app is None:
+                raise NotFoundError(message="Application not found")
+            # Agencies only — staff applications do not soft-delete via this path.
+            if app.application_type != ApplicationType.AGENT.value:
+                raise BadRequestError(message="Only agencies can be soft-deleted this way")
+            app.active = bool(payload.active)
+            await session.commit()
+            await session.refresh(app)
+            return self._to_data(app)
+
     async def delete_application(
         self, payload: ApplicationDeletePayload, auth_token: str = ""
     ) -> ApplicationData:
+        # Hard/cascade soft-delete path kept but route registration is commented out.
+        # Agencies use set_application_active instead (DB-only active toggle).
         async_session = get_async_session_maker()
         async with async_session() as session:
             app = await session.get(Application, payload.id)

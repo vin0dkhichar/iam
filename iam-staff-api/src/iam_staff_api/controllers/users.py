@@ -12,7 +12,7 @@ from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.services.data_policy_service import DataPolicyService
 from iam_core.services.user_service import UserService
 from iam_core.user_auth.decorators import require_permissions
-from iam_core.user_auth.helpers.data_policy_role_helper import DP_ROLE_PREFIX
+from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX, DP_ROLE_PREFIX
 from ..config import Settings
 from .agencies import admin_client_roles, require_synced_agency
 from ..schemas import (
@@ -44,6 +44,15 @@ class UsersController(BaseController):
         session_maker = get_async_session_maker()
         async with session_maker() as session:
             await require_synced_agency(session, body.agency_id)
+            # Agency admins inherit all AGC_ policies on the agency client.
+            policies = await self._policies.policies_for_agency(session, body.agency_id)
+            agc_roles = sorted(
+                {
+                    policy.policy_mnemonic
+                    for policy in policies
+                    if str(policy.policy_mnemonic).startswith(AGC_ROLE_PREFIX)
+                }
+            )
             user = await self._service.create_user(
                 session,
                 realm=ApplicationType.AGENT.value,
@@ -51,7 +60,8 @@ class UsersController(BaseController):
                 first_name=body.first_name,
                 last_name=body.last_name,
                 agency_id=body.agency_id,
-                keycloak_clients=admin_client_roles(),
+                # keycloak_clients=admin_client_roles(),
+                keycloak_clients=admin_client_roles(body.agency_id, agc_roles),
             )
             await session.commit()
             user_id = user.id

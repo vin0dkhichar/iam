@@ -46,24 +46,25 @@ class LoginProvidersController(BaseController):
             responses={200: {"model": LoginProviderResponse}},
             methods=["POST"],
         )
-        self.router.add_api_route(
-            "/create_login_provider",
-            self.create_login_provider,
-            responses={200: {"model": LoginProviderResponse}},
-            methods=["POST"],
-        )
+        # Login providers: add/delete removed from UI — edit only.
+        # self.router.add_api_route(
+        #     "/create_login_provider",
+        #     self.create_login_provider,
+        #     responses={200: {"model": LoginProviderResponse}},
+        #     methods=["POST"],
+        # )
         self.router.add_api_route(
             "/update_login_provider",
             self.update_login_provider,
             responses={200: {"model": LoginProviderResponse}},
             methods=["POST"],
         )
-        self.router.add_api_route(
-            "/delete_login_provider",
-            self.delete_login_provider,
-            responses={200: {"model": LoginProviderResponse}},
-            methods=["POST"],
-        )
+        # self.router.add_api_route(
+        #     "/delete_login_provider",
+        #     self.delete_login_provider,
+        #     responses={200: {"model": LoginProviderResponse}},
+        #     methods=["POST"],
+        # )
 
     @require_permissions({"loginProvider:view"})
     async def get_login_providers(self, get_request: GetLoginProvidersRequest) -> LoginProvidersResponse:

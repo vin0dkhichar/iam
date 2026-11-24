@@ -4,8 +4,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { useTranslations } from "next-intl";
-import { AddButton, Button, FormActions, InputField, Modal, Tabs } from "@/components";
-import { toast } from "react-toastify";
+import { Tabs } from "@/components";
 import { useRbac } from "@/context/RbacContext";
 import {
   APPLICATION_ACTIONS,
@@ -13,7 +12,6 @@ import {
   PERMISSION_ACTIONS,
   ROLE_ACTIONS,
   ROLE_PERMISSION_ACTIONS,
-  USER_ACTIONS,
 } from "@/shared/permissions/actions";
 
 import { useApplicationData } from "@/features/application/hooks/useApplicationData";
@@ -71,10 +69,6 @@ export default function ApplicationDetailPage() {
   } = useApplicationData(applicationId);
 
   // Tab state from URL
-  const [usersRefresh, setUsersRefresh] = useState(0);
-  const [adminOpen, setAdminOpen] = useState(false);
-  const [adminSaving, setAdminSaving] = useState(false);
-  const [adminForm, setAdminForm] = useState({ first_name: "", last_name: "", email: "" });
   const [tab, setTab] = useState<TabId>(() => {
     const tabParam = searchParams.get("tab");
     return (tabParam as TabId) || "application";
@@ -110,8 +104,21 @@ export default function ApplicationDetailPage() {
     isAgent
       ? [
           { id: "application" as TabId, label: "tabAgency", action: APPLICATION_ACTIONS.view },
-          { id: "users" as TabId, label: "tabUsers", action: APPLICATION_ACTIONS.view },
-          ...TAB_DEFINITIONS.slice(1),
+          { id: "users" as TabId, label: "tabAgencyAdmins", action: APPLICATION_ACTIONS.view },
+          // Agency: roles / permissions / role-permission mapping hidden.
+          // ...TAB_DEFINITIONS.slice(1),
+          // { id: "roles" as TabId, label: "tabRoles", action: ROLE_ACTIONS.view },
+          // { id: "permissions" as TabId, label: "tabPermissions", action: PERMISSION_ACTIONS.view },
+          // {
+          //   id: "role-permissions" as TabId,
+          //   label: "tabRolePermissions",
+          //   action: ROLE_PERMISSION_ACTIONS.view,
+          // },
+          {
+            id: "data-policies" as TabId,
+            label: "tabAgencyDataPolicies",
+            action: DATA_POLICY_ACTIONS.view,
+          },
         ]
       : TAB_DEFINITIONS
   )
@@ -150,53 +157,7 @@ export default function ApplicationDetailPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-4 mb-3">
-        <h1 className="text-[24px] font-bold text-black mb-4">{app.application_mnemonic}</h1>
-        {app.application_type === "agent" && can(USER_ACTIONS.create) && (
-          <AddButton label={t("addAdmin")} onClick={() => setAdminOpen(true)} />
-        )}
-      </div>
-      {adminOpen && (
-        <Modal title={t("addAdmin")} onClose={() => setAdminOpen(false)}>
-          <form
-            onSubmit={async (event) => {
-              event.preventDefault();
-              setAdminSaving(true);
-              try {
-                const response = await fetch("/api/users/create-agency-admin", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    agency_id: app.application_mnemonic,
-                    ...adminForm,
-                  }),
-                });
-                const data = await response.json();
-                if (!response.ok) {
-                  toast.error(data.detail || data.error || "Failed to add admin");
-                  return;
-                }
-                setAdminOpen(false);
-                setAdminForm({ first_name: "", last_name: "", email: "" });
-                setUsersRefresh((value) => value + 1);
-                toast.success(t("adminCreated"));
-              } finally {
-                setAdminSaving(false);
-              }
-            }}
-          >
-            <div className="grid gap-4">
-              <InputField label={t("firstName")} value={adminForm.first_name} onChange={(value) => setAdminForm((form) => ({ ...form, first_name: value }))} required />
-              <InputField label={t("lastName")} value={adminForm.last_name} onChange={(value) => setAdminForm((form) => ({ ...form, last_name: value }))} required />
-              <InputField label={t("email")} type="email" value={adminForm.email} onChange={(value) => setAdminForm((form) => ({ ...form, email: value }))} required />
-            </div>
-            <FormActions>
-              <Button type="button" onClick={() => setAdminOpen(false)}>{t("cancel")}</Button>
-              <Button type="submit" disabled={adminSaving}>{adminSaving ? t("saving") : t("save")}</Button>
-            </FormActions>
-          </form>
-        </Modal>
-      )}
+      <h1 className="text-[24px] font-bold text-black mb-4">{app.application_mnemonic}</h1>
 
       <Tabs
         tabs={visibleTabs}
@@ -220,21 +181,37 @@ export default function ApplicationDetailPage() {
         />
       </div>
 
+      {/* Agency: roles / permissions / mapping tabs hidden. */}
+      {!isAgent && (
+        <>
+          <div style={{ display: tab === "roles" ? "block" : "none" }}>
+            <RolesTab applicationId={applicationId} isActive={tab === "roles"} />
+          </div>
+
+          <div style={{ display: tab === "permissions" ? "block" : "none" }}>
+            <PermissionsTab applicationId={applicationId} isActive={tab === "permissions"} />
+          </div>
+
+          <div style={{ display: tab === "role-permissions" ? "block" : "none" }}>
+            <RolePermissionsTab applicationId={applicationId} isActive={tab === "role-permissions"} />
+          </div>
+        </>
+      )}
+      {/*
       <div style={{ display: tab === "roles" ? "block" : "none" }}>
         <RolesTab applicationId={applicationId} isActive={tab === "roles"} />
       </div>
-
       <div style={{ display: tab === "permissions" ? "block" : "none" }}>
         <PermissionsTab applicationId={applicationId} isActive={tab === "permissions"} />
       </div>
-
       <div style={{ display: tab === "role-permissions" ? "block" : "none" }}>
         <RolePermissionsTab applicationId={applicationId} isActive={tab === "role-permissions"} />
       </div>
+      */}
 
       {isAgent && (
         <div style={{ display: tab === "users" ? "block" : "none" }}>
-          <AgencyUsersTab agencyId={app.application_mnemonic} refreshKey={usersRefresh} />
+          <AgencyUsersTab agencyId={app.application_mnemonic} />
         </div>
       )}
 
@@ -243,6 +220,7 @@ export default function ApplicationDetailPage() {
           applicationId={applicationId}
           apiUrl={app.api_url}
           isActive={tab === "data-policies"}
+          isAgency={isAgent}
         />
       </div>
 

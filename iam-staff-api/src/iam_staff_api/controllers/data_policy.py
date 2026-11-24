@@ -174,7 +174,9 @@ class DataPolicyController(BaseController):
                     from sqlalchemy import select
 
                     from iam_core.models import Role
-                    from iam_core.models.enum import SyncStatus
+                    from iam_core.models.enum import ApplicationType, SyncStatus
+                    from iam_core.services.user_service import UserService
+                    from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX
 
                     existing_role = await session.scalar(
                         select(Role).where(
@@ -191,6 +193,25 @@ class DataPolicyController(BaseController):
                                 sync_status=SyncStatus.PENDING.value,
                                 active=True,
                             )
+                        )
+                    # AGC_ roles are inherited by every agency user; queue Keycloak UPDATE_ROLES.
+                    if (
+                        mnemonic.startswith(AGC_ROLE_PREFIX)
+                        and application is not None
+                        and application.application_type == ApplicationType.AGENT.value
+                    ):
+                        policies = await self._service.policies_for_agency(
+                            session, application.application_mnemonic
+                        )
+                        agc_roles = [
+                            item.policy_mnemonic
+                            for item in policies
+                            if str(item.policy_mnemonic).startswith(AGC_ROLE_PREFIX)
+                        ]
+                        await UserService().refresh_inherited_agc_roles(
+                            session,
+                            agency_id=application.application_mnemonic,
+                            agc_roles=agc_roles,
                         )
 
                 await session.commit()
@@ -227,12 +248,15 @@ class DataPolicyController(BaseController):
                     policy_id=payload.policy_id,
                     session=session,
                 )
+                from sqlalchemy import select
+
+                from iam_core.models import Role
+                from iam_core.models.application import Application
+                from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
+                from iam_core.services.user_service import UserService
+                from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX
+
                 if should_delete_role and application_id is not None:
-                    from sqlalchemy import select
-
-                    from iam_core.models import Role
-                    from iam_core.models.enum import SyncStatus
-
                     role = await session.scalar(
                         select(Role).where(
                             Role.application_id == application_id,
@@ -240,11 +264,29 @@ class DataPolicyController(BaseController):
                         )
                     )
                     if role is not None:
-                        from iam_core.models.enum import SyncAction
-
                         role.active = False
                         role.sync_status = SyncStatus.PENDING.value
                         role.sync_error = SyncAction.DELETE.value
+                # Drop removed AGC_ from agency users and queue Keycloak UPDATE_ROLES.
+                if application_id is not None and str(policy_mnemonic).startswith(AGC_ROLE_PREFIX):
+                    application = await session.get(Application, application_id)
+                    if (
+                        application is not None
+                        and application.application_type == ApplicationType.AGENT.value
+                    ):
+                        policies = await self._service.policies_for_agency(
+                            session, application.application_mnemonic
+                        )
+                        agc_roles = [
+                            item.policy_mnemonic
+                            for item in policies
+                            if str(item.policy_mnemonic).startswith(AGC_ROLE_PREFIX)
+                        ]
+                        await UserService().refresh_inherited_agc_roles(
+                            session,
+                            agency_id=application.application_mnemonic,
+                            agc_roles=agc_roles,
+                        )
                 await session.commit()
             return self.helper.construct_payload_response(
                 request,

@@ -41,13 +41,15 @@ export default function ApplicationTab({
           {isAgent ? (
             <>
               <InputField
-                label={t("agencyId")}
+                label={t("mnemonic")}
+                // label={t("agencyId")}
                 value={app.application_mnemonic}
                 onChange={() => {}}
                 disabled
               />
               <InputField
-                label={t("agencyName")}
+                label={t("description")}
+                // label={t("agencyName")}
                 value={appForm.application_description}
                 onChange={(value) =>
                   setAppForm((f: typeof appForm) => ({
@@ -155,25 +157,28 @@ export default function ApplicationTab({
             disabled={isDisabled}
           />
 
+          {/* Icon: preview only — Change icon hidden for staff applications. */}
           <div className="col-span-full">
             <IconBase64Field
               value={appForm.icon_base64}
               mimeType={appForm.icon_mime_type}
-              disabled={isDisabled}
-              onChange={(base64, mimeType) =>
-                setAppForm((f: typeof appForm) => ({
-                  ...f,
-                  icon_base64: base64,
-                  icon_mime_type: mimeType,
-                }))
-              }
-              onClear={() =>
-                setAppForm((f: typeof appForm) => ({
-                  ...f,
-                  icon_base64: "",
-                  icon_mime_type: "image/png",
-                }))
-              }
+              readOnly
+              onChange={() => {}}
+              // disabled={isDisabled}
+              // onChange={(base64, mimeType) =>
+              //   setAppForm((f: typeof appForm) => ({
+              //     ...f,
+              //     icon_base64: base64,
+              //     icon_mime_type: mimeType,
+              //   }))
+              // }
+              // onClear={() =>
+              //   setAppForm((f: typeof appForm) => ({
+              //     ...f,
+              //     icon_base64: "",
+              //     icon_mime_type: "image/png",
+              //   }))
+              // }
             />
           </div>
           </>

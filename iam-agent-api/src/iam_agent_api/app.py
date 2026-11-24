@@ -8,7 +8,7 @@ from iam_core.controllers import AccessController, AuthController, IdentityProvi
 from iam_core.models.enum import ApplicationType
 from iam_core.services.data_policy_service import DataPolicyService
 from iam_core.user_auth.app import Initializer as AuthInitializer
-from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX
+from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX, AGT_ROLE_PREFIX
 from iam_core.user_auth.middleware import CsrfMiddleware
 from iam_core.user_auth.middleware.data_policy import DataPolicyMiddleware
 from iam_core.user_auth.middleware.resolve_permissions import ResolvePermissionMiddleware
@@ -53,6 +53,7 @@ class Initializer(AuthInitializer):
                 DataPolicyMiddleware,
                 iam_api_url=_config.agent_api_url,
                 role_prefix=AGC_ROLE_PREFIX,
+                role_prefixes=(AGC_ROLE_PREFIX, AGT_ROLE_PREFIX),
             )
         self.return_app().add_middleware(
             AgentTokenMiddleware,

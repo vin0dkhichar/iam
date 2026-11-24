@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
     redirectUri = `${proto}://${host}${redirectUri}`;
   }
-  const providerId = process.env.LOGIN_PROVIDER_ID || "agency-web";
+  const providerId = process.env.LOGIN_PROVIDER_ID || "agent-portal";
   const response = await fetch(
     `${agentApiUrl()}/auth/start_authentication_transaction?id=${providerId}&redirect_uri=${encodeURIComponent(redirectUri)}`,
     { method: "POST", headers: { accept: "application/json" }, body: "" },

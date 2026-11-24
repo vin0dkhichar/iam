@@ -20,6 +20,7 @@ interface DataPoliciesTabProps {
   applicationId: number;
   apiUrl?: string | null;
   isActive?: boolean;
+  isAgency?: boolean;
 }
 
 const POLICY_TARGETS = [
@@ -32,6 +33,7 @@ export default function DataPoliciesTab({
   applicationId,
   apiUrl,
   isActive = false,
+  isAgency = false,
 }: DataPoliciesTabProps) {
   const t = useTranslations();
   const { pageSize } = useConfig();
@@ -186,7 +188,10 @@ export default function DataPoliciesTab({
       <Card padding="none" className="pb-6">
         <div className="flex items-center justify-between gap-4 mb-0 px-9 pt-6 pb-4">
           <div className="flex items-center gap-3">
-            <h2 className="m-0 text-[20px] font-medium text-black">Data Policies</h2>
+            <h2 className="m-0 text-[20px] font-medium text-black">
+              {isAgency ? t("tabAgencyDataPolicies") : t("tabDataPolicies")}
+            </h2>
+            {/* <h2 className="m-0 text-[20px] font-medium text-black">Data Policies</h2> */}
           </div>
           <div className="flex items-center gap-3">
             <div className="w-48">
@@ -222,6 +227,10 @@ export default function DataPoliciesTab({
             />
           </div>
         </div>
+        {/* DP_/AGC_ prefix hint shown only on the add/create policy page, not this list. */}
+        {/* <p className="px-9 pb-2 m-0 text-[14px] text-gray-600">
+          {isAgency ? t("agcPrefixHint") : t("dpPrefixHint")}
+        </p> */}
 
         {!canListPolicies ? (
           <div className="px-9 text-sm text-gray-500 text-center py-8">

@@ -135,6 +135,13 @@ class ApplicationDeletePayload(BaseModel):
     id: int
 
 
+class ApplicationSetActivePayload(BaseModel):
+    """Soft-activate / soft-deactivate an application (DB only, no Keycloak)."""
+
+    id: int
+    active: bool
+
+
 class ApplicationIdPayload(BaseModel):
     id: int
 
@@ -395,6 +402,14 @@ class DeleteApplicationRequest(G2PRequest):
     request_body: DeleteApplicationRequestBody
 
 
+class SetActiveApplicationRequestBody(G2PRequestBody):
+    request_payload: ApplicationSetActivePayload
+
+
+class SetActiveApplicationRequest(G2PRequest):
+    request_body: SetActiveApplicationRequestBody
+
+
 class RolesResponseBody(G2PResponseBody):
     response_payload: Optional[List[RoleData]] = None
 
@@ -621,6 +636,17 @@ class CreateAgencyResponse(BaseModel):
     agency_id: str
     client_status: str
     group_status: str
+
+
+class SetAgencyActiveBody(BaseModel):
+    id: int
+    active: bool
+
+
+class SetAgencyActiveResponse(BaseModel):
+    id: str
+    agency_id: str
+    active: bool
 
 
 class CreateAgencyAdminBody(BaseModel):

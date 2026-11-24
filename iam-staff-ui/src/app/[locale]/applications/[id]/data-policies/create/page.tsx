@@ -191,7 +191,16 @@ export default function CreateDataPolicyPage({ params }: { params: Promise<{ id:
             </button>
             <div className="flex items-center gap-3">
               <div>
-                <h1 className="text-lg font-semibold text-[#000000] m-0">Add Data Policy</h1>
+                <h1 className="text-lg font-semibold text-[#000000] m-0">
+                  {app?.application_type === "agent"
+                    ? t("addAgencyDataPolicy")
+                    : t("addStaffDataPolicy")}
+                  {/* : t("addDataPolicy") */}
+                </h1>
+                {/* <h1 className="text-lg font-semibold text-[#000000] m-0">Add Data Policy</h1> */}
+                <p className="m-0 mt-1 text-[14px] text-gray-600">
+                  {app?.application_type === "agent" ? t("agcPrefixHint") : t("dpPrefixHint")}
+                </p>
               </div>
             </div>
           </div>
@@ -243,6 +252,10 @@ export default function CreateDataPolicyPage({ params }: { params: Promise<{ id:
                 onChange={setPolicyMnemonic}
                 placeholder={t('enter_policy_mnemonic')}
               />
+              {/* DP_ for Staff Applications menu, AGC_ for Agencies menu */}
+              <p className="m-0 mt-1 text-[13px] text-gray-600">
+                {app?.application_type === "agent" ? t("agcPrefixHint") : t("dpPrefixHint")}
+              </p>
             </div>
             <div className="md:col-span-2">
               <TextAreaField

@@ -1,4 +1,4 @@
-import { Can, DeleteButton, StatusBadge } from "@/components";
+// import { Can, DeleteButton, StatusBadge } from "@/components";
 
 interface LoginProvider {
   id: number;
@@ -41,35 +41,37 @@ export function getLoginProviderColumns({
       header: t("issuer"),
       render: (lp: LoginProvider) => lp.issuer,
     },
-    {
-      key: "authMethod",
-      header: t("authMethod"),
-      render: (lp: LoginProvider) => lp.token_endpoint_auth_method || "—",
-    },
-    {
-      key: "status",
-      header: t("status"),
-      render: (lp: LoginProvider) => (
-        <StatusBadge
-          active={lp.active}
-          activeLabel={t("active")}
-          inactiveLabel={t("inactive")}
-        />
-      ),
-    },
-    {
-      key: "actions",
-      header: t("actions"),
-      render: (lp: LoginProvider) => (
-        <Can action="loginProvider:delete">
-          <DeleteButton
-            onClick={() => onDelete(lp)}
-            title={t("deleteLoginProvider")}
-          >
-            {t("delete")}
-          </DeleteButton>
-        </Can>
-      ),
-    },
+    // {
+    //   key: "authMethod",
+    //   header: t("authMethod"),
+    //   render: (lp: LoginProvider) => lp.token_endpoint_auth_method || "—",
+    // },
+    // Login providers: status column removed.
+    // {
+    //   key: "status",
+    //   header: t("status"),
+    //   render: (lp: LoginProvider) => (
+    //     <StatusBadge
+    //       active={lp.active}
+    //       activeLabel={t("active")}
+    //       inactiveLabel={t("inactive")}
+    //     />
+    //   ),
+    // },
+    // Login providers: delete removed — edit via row click only.
+    // {
+    //   key: "actions",
+    //   header: t("actions"),
+    //   render: (lp: LoginProvider) => (
+    //     <Can action="loginProvider:delete">
+    //       <DeleteButton
+    //         onClick={() => onDelete(lp)}
+    //         title={t("deleteLoginProvider")}
+    //       >
+    //         {t("delete")}
+    //       </DeleteButton>
+    //     </Can>
+    //   ),
+    // },
   ];
 }

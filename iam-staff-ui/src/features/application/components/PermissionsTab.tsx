@@ -132,8 +132,10 @@ export default function PermissionsTab({ applicationId, isActive = false }: Perm
         columns={getPermissionColumns(handleDeletePermission, t)}
         onPageChange={permissions.setPage}
         onAdd={() => setPermModal(true)}
+        showAddButton={false}
       />
 
+      {/* Permissions create/delete disabled — view only.
       {permModal && (
         <FormModal
           title="Add Permission"
@@ -167,6 +169,7 @@ export default function PermissionsTab({ applicationId, isActive = false }: Perm
           onCancel={() => setConfirm((c) => ({ ...c, open: false }))}
         />
       )}
+      */}
     </>
   );
 }

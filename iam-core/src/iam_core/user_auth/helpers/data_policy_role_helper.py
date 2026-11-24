@@ -1,7 +1,8 @@
-"""Roles representing data policies are identified by a DP_ prefix in Keycloak."""
+"""Roles representing data policies are identified by a DP_ / AGC_ / AGT_ prefix in Keycloak."""
 
 DP_ROLE_PREFIX = "DP_"
 AGC_ROLE_PREFIX = "AGC_"
+AGT_ROLE_PREFIX = "AGT_"
 
 
 def is_dp_role(role: str, prefix: str = DP_ROLE_PREFIX) -> bool:

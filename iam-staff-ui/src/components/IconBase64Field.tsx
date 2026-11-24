@@ -12,6 +12,8 @@ type IconBase64FieldProps = {
   onChange: (base64: string, mimeType: string) => void;
   onClear?: () => void;
   disabled?: boolean;
+  /** Preview only — hide Change / Upload / Remove controls. */
+  readOnly?: boolean;
 };
 
 export default function IconBase64Field({
@@ -21,6 +23,7 @@ export default function IconBase64Field({
   onChange,
   onClear,
   disabled = false,
+  readOnly = false,
 }: IconBase64FieldProps) {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -52,30 +55,33 @@ export default function IconBase64Field({
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <div className="flex flex-wrap gap-2">
-            <input
-              ref={inputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              disabled={disabled}
-              onChange={handleFileChange}
-            />
-            <SecondaryButton
-              disabled={disabled}
-              onClick={() => inputRef.current?.click()}
-            >
-              {previewSrc ? t("changeIcon") : t("uploadIcon")}
-            </SecondaryButton>
-            {previewSrc && !disabled && (
-              <SecondaryButton onClick={() => onClear?.()}>
-                {t("removeIcon")}
+        {!readOnly && (
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <div className="flex flex-wrap gap-2">
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={disabled}
+                onChange={handleFileChange}
+              />
+              {/* Change / Upload icon controls */}
+              <SecondaryButton
+                disabled={disabled}
+                onClick={() => inputRef.current?.click()}
+              >
+                {previewSrc ? t("changeIcon") : t("uploadIcon")}
               </SecondaryButton>
-            )}
+              {previewSrc && !disabled && (
+                <SecondaryButton onClick={() => onClear?.()}>
+                  {t("removeIcon")}
+                </SecondaryButton>
+              )}
+            </div>
+            <span className="text-[13px] text-(--color-text-muted)">Supports SVG, PNG, JPEG, GIF, BMP</span>
           </div>
-          <span className="text-[13px] text-(--color-text-muted)">Supports SVG, PNG, JPEG, GIF, BMP</span>
-        </div>
+        )}
       </div>
     </div>
   );

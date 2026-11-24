@@ -377,10 +377,21 @@ iamAgentPortalApi:
     - id: 10
       userType: "agent"
       providerName: "Keycloak"
-      description: "Login with Keycloak"
+      description: "Agent portal (web)"
       realm: "agent"
       clientId: "agent-portal"
       clientSecret: "agent_portal_secret"
+      tokenEndpointAuthMethod: "client_secret_basic"
+      scope: "openid profile email"
+      enablePkce: true
+      active: true
+    - id: 11
+      userType: "agent"
+      providerName: "Keycloak"
+      description: "Agent app (mobile)"
+      realm: "agent"
+      clientId: "agent-app"
+      clientSecret: "agent_app_secret"
       tokenEndpointAuthMethod: "client_secret_basic"
       scope: "openid profile email"
       enablePkce: true
@@ -691,7 +702,9 @@ iamAgentUi:
     PORT: "3000"
     NODE_ENV: "production"
     BACKEND_API_URL: 'https://{{ tpl .Values.iamAgentPortalApi.hostname $ }}'
-    LOGIN_PROVIDER_ID: "agency-web"
+    LOGIN_PROVIDER_ID: "agent-portal"
+    APPLICATION_MNEMONIC: "agent-portal"
+    MASTERDATA_API_URL: '{{ tpl .Values.global.masterDataApiUrl $ }}'
     COOKIE_DOMAIN: '{{ tpl .Values.global.authCookieDomain $ }}'
 
 # ---------------------------------------------------------------------------
