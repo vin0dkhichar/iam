@@ -15,7 +15,7 @@ def agency_id_from_request(request: Request) -> str:
 
 
 def require_agency_admin(request: Request) -> None:
-    # AGENCY_ADMIN lives on agent-portal only (not agent-app / agency client).
+    # AGENCY_ADMIN lives on agent-portal only (not the agency client).
     roles = (request.state.auth.client_roles or {}).get(AGENT_PORTAL_CLIENT, [])
     if AGENCY_ADMIN_ROLE not in roles:
         raise ForbiddenError(message="Only an agency admin can manage agents")

@@ -345,11 +345,15 @@ class KeycloakAdmin:
             json_body=roles,
         )
 
-    async def ensure_groups_claim(self, client: httpx.AsyncClient, realm: str, client_id: str) -> None:
-        """Put the user's Keycloak groups on the access token as ``groups``."""
+    async def ensure_groups_claim(self, client: httpx.AsyncClient, realm: str, client_id: str) -> bool:
+        """Put the user's Keycloak groups on the access token as ``groups``.
+
+        Returns False when the OIDC client is missing so user sync can continue.
+        """
         client_uuid = await self.find_client_uuid(client, realm, client_id)
         if not client_uuid:
-            raise KeycloakAdminError(f"Keycloak client not found: {client_id}")
+            _logger.warning("Skipping groups claim; Keycloak client not found: %s", client_id)
+            return False
         existing = await self._request(
             client,
             "GET",
@@ -357,7 +361,7 @@ class KeycloakAdmin:
             f"/clients/{client_uuid}/protocol-mappers/models",
         )
         if any(row.get("name") == "groups" for row in existing.json()):
-            return
+            return True
         await self._request(
             client,
             "POST",
@@ -377,6 +381,7 @@ class KeycloakAdmin:
             },
             expected=(201,),
         )
+        return True
 
     async def join_group(self, client: httpx.AsyncClient, realm: str, user_id: str, group_id: str) -> None:
         await self._request(

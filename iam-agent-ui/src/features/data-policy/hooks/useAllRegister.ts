@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useFetch } from '@/shared/hooks/useFetch';
 import { getCsrfTokenFromDocument } from '@/shared/utils/csrf';
 

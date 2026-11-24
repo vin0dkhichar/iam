@@ -78,7 +78,11 @@ class UsersController(BaseController):
         session_maker = get_async_session_maker()
         async with session_maker() as session:
             users, total = await self._service.list_for_agency(
-                session, body.agency_id, page=page, page_size=page_size
+                session,
+                body.agency_id,
+                page=page,
+                page_size=page_size,
+                agency_admins_only=True,
             )
             pages = (total + page_size - 1) // page_size if page_size else 0
             return AgencyUsersResponse(

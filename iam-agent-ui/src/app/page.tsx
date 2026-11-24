@@ -7,7 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/Auth";
 import Pagination from "@/components/Pagination";
 import { CustomDropdown, ViewDataPolicyModal } from "@/features/data-policy/components";
-import { useAgency, useAllRegister, type Register } from "@/features/data-policy/hooks";
+import { useAgency } from "@/features/data-policy/hooks/useAgency";
+import { useAllRegister, type Register } from "@/features/data-policy/hooks/useAllRegister";
 
 const POLICY_TARGETS = [
   { label: "Register", value: "REGISTER_RECORD" },
@@ -488,7 +489,7 @@ export default function UsersPage() {
 
       {menu === "agency-data-policies" && (
         <>
-          <p className="mb-4 text-[14px] text-gray-600">{t("agcReadOnlyHint")}</p>
+          {/* <p className="mb-4 text-[14px] text-gray-600">{t("agcReadOnlyHint")}</p> */}
           <StaffTable
             columns={[t("name"), t("policyTarget"), t("policyType"), t("keycloakClientStatus")]}
             empty={t("noAgencyDataPolicies")}

@@ -460,12 +460,16 @@ iamAgentPortalApi:
       secretKeyRef:
         name: '{{ tpl .Values.global.iamDBSecret $ }}'
         key: '{{ tpl .Values.global.iamDBUserPasswordKey $ }}'
-    # The agent client's secret, created in the agent realm (by keycloak-init on
-    # the commons layer; Secret name = clientId). `optional` so the chart still
-    # installs if the Job has not finished — login cannot complete until it has.
+    # Client secrets created by this chart's keycloak-init (Secret name = clientId).
+    # `optional` so the chart still installs if the Job has not finished.
     IAM_AGENT_DATA_CLIENT_SECRETS__AGENT_PORTAL_SECRET:
       secretKeyRef:
         name: agent-portal
+        key: client_secret
+        optional: true
+    IAM_AGENT_DATA_CLIENT_SECRETS__AGENT_APP_SECRET:
+      secretKeyRef:
+        name: agent-app
         key: client_secret
         optional: true
     IAM_AGENT_AUTH_OIDC_CLIENT_SECRET:
@@ -585,9 +589,8 @@ iamCelery:
       CELERY_OPTS: 'worker --beat --loglevel=info -Q celery --schedule=/tmp/celerybeat-schedule'
 
 # ---------------------------------------------------------------------------
-# keycloak-init — IAM OIDC client + iam.admin in the shared `staff` realm.
-# IAM is installed before registry; registry keycloak-init only maps
-# registry client roles onto this existing user (no password, no IAM client).
+# keycloak-init — IAM clients/roles in existing `staff` and `agent` realms.
+# staff-portal itself is created by commons-services keycloak-init.
 # ---------------------------------------------------------------------------
 keycloak-init:
   enabled: true
@@ -611,6 +614,15 @@ keycloak-init:
           webOrigins: ["+"]
           clientRoles:
             - "IAM_ADMIN"
+        # Confidential service account used by Celery/API for Keycloak Admin REST
+        # in this realm (same client id + secret also exists in the agent realm).
+        - clientId: iam-provision
+          name: IAM Provisioning
+          description: Service-account client for IAM Keycloak provisioning (users, roles, groups, clients).
+          publicClient: false
+          serviceAccountsEnabled: true
+          redirectUris:
+            - "*"
       users:
         - username: iam.admin
           firstName: IAM
@@ -623,6 +635,63 @@ keycloak-init:
               - "IAM_ADMIN"
             realm-management:
               - "manage-clients"
+              - "manage-users"
+              - "view-clients"
+              - "view-users"
+        # Auto-created when iam-provision has serviceAccountsEnabled; grant admin roles.
+        - username: service-account-iam-provision
+          clientRoleMappings:
+            realm-management:
+              - "manage-clients"
+              - "manage-users"
+              - "manage-groups"
+              - "view-clients"
+              - "view-users"
+              - "view-groups"
+              - "query-clients"
+              - "query-users"
+              - "query-groups"
+    agent:
+      clients:
+        - clientId: agent-portal
+          name: Agent Portal
+          description: OIDC client for the agent web UI; holds AGENCY_ADMIN.
+          publicClient: false
+          redirectUris:
+            - 'https://{{ tpl .Values.iamAgentPortalApi.hostname $ }}/*'
+            - 'https://{{ tpl .Values.global.agentPortalHostname $ }}/*'
+            - 'https://{{ tpl .Values.iamAgentUi.hostname $ }}/*'
+          webOrigins: ["+"]
+          clientRoles:
+            - "AGENCY_ADMIN"
+        - clientId: agent-app
+          name: Agent App
+          description: OIDC client for the agent mobile app.
+          publicClient: false
+          redirectUris:
+            - "*"
+          webOrigins: ["+"]
+        # Same client id/secret as staff; Keycloak secret K8s name = clientId.
+        - clientId: iam-provision
+          name: IAM Provisioning
+          description: Service-account client for IAM Keycloak provisioning in the agent realm.
+          publicClient: false
+          serviceAccountsEnabled: true
+          redirectUris:
+            - "*"
+      users:
+        - username: service-account-iam-provision
+          clientRoleMappings:
+            realm-management:
+              - "manage-clients"
+              - "manage-users"
+              - "manage-groups"
+              - "view-clients"
+              - "view-users"
+              - "view-groups"
+              - "query-clients"
+              - "query-users"
+              - "query-groups"
 
 # ---------------------------------------------------------------------------
 # IAM Staff UI (Next.js BFF) — Applications / Login Providers admin

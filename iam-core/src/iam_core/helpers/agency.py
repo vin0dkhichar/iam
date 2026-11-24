@@ -1,9 +1,9 @@
 """Shared Keycloak portal clients and agency-admin helpers.
 
 Portal OIDC clients (not the per-agency client):
-  - agent-portal  — web UI; holds AGENCY_ADMIN
-  - agent-app     — mobile app
+  - agent-portal  — agent UI (agency admin and normal agents); holds AGENCY_ADMIN
   - staff-portal  — staff UI
+  # - agent-app   — unused; agents provision/login via agent-portal only
 
 Per-agency Keycloak client id == agency_id; it holds AGC_ / AGT_ data-policy roles.
 """
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 AGENCY_ADMIN_ROLE = "AGENCY_ADMIN"
 AGENT_PORTAL_CLIENT = "agent-portal"
-AGENT_APP_CLIENT = "agent-app"
+# AGENT_APP_CLIENT = "agent-app"  # unused — agents use agent-portal only
 STAFF_PORTAL_CLIENT = "staff-portal"
 
 # Backward-compatible alias (was agency-web).

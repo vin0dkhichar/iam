@@ -9,7 +9,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.helpers.keycloak_admin import KeycloakAdmin, KeycloakAdminError
 from iam_core.helpers.keycloak_admin_config import ProvisioningSettings
-from iam_core.helpers.agency import AGENT_APP_CLIENT, AGENT_PORTAL_CLIENT
+from iam_core.helpers.agency import AGENT_PORTAL_CLIENT
 from iam_core.models.application import Application
 from iam_core.models.data_policy import DataPolicy
 from iam_core.models.application_permission import ApplicationPermission
@@ -216,9 +216,8 @@ async def provision_user(session, admin: KeycloakAdmin, user: User) -> None:
             )
         user.keycloak_user_id = keycloak_id
         if group_id:
-            # Groups claim on both agent OIDC clients so web + mobile tokens carry agency.
+            # Agents (agency admin and normal users) use agent-portal only — not agent-app.
             await admin.ensure_groups_claim(http, realm, AGENT_PORTAL_CLIENT)
-            await admin.ensure_groups_claim(http, realm, AGENT_APP_CLIENT)
             await admin.join_group(http, realm, keycloak_id, group_id)
         # Password email is off for now. The user is only created in Keycloak.
         # await admin.send_password_email(http, realm, keycloak_id)

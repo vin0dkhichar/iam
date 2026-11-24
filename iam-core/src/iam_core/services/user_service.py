@@ -8,7 +8,12 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from iam_core.helpers.agency import merge_agency_client_roles, with_inherited_agc_roles
+from iam_core.helpers.agency import (
+    AGENCY_ADMIN_ROLE,
+    AGENT_PORTAL_CLIENT,
+    merge_agency_client_roles,
+    with_inherited_agc_roles,
+)
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.user import User
 
@@ -76,6 +81,15 @@ class UserService:
         await session.flush()
         return user
 
+    @staticmethod
+    def _has_agency_admin_role(user: User) -> bool:
+        for entry in user.keycloak_clients or []:
+            if entry.get("client_id") != AGENT_PORTAL_CLIENT:
+                continue
+            if AGENCY_ADMIN_ROLE in (entry.get("roles") or []):
+                return True
+        return False
+
     async def list_for_agency(
         self,
         session: AsyncSession,
@@ -83,6 +97,7 @@ class UserService:
         *,
         page: int = 1,
         page_size: int = 10,
+        agency_admins_only: bool = False,
     ) -> tuple[list[User], int]:
         page = max(1, page)
         page_size = max(1, min(page_size, 100))
@@ -91,6 +106,17 @@ class UserService:
             User.agency_id == agency_id,
             User.active.is_(True),
         )
+        if agency_admins_only:
+            # JSON shape varies by driver; filter in Python so staff UI only shows
+            # users with AGENCY_ADMIN on agent-portal (not every agency agent).
+            rows = list(
+                await session.scalars(select(User).where(*filters).order_by(User.email.asc()))
+            )
+            admins = [user for user in rows if self._has_agency_admin_role(user)]
+            total = len(admins)
+            start = (page - 1) * page_size
+            return admins[start : start + page_size], total
+
         total = int(await session.scalar(select(func.count()).select_from(User).where(*filters)) or 0)
         rows = await session.scalars(
             select(User)
