@@ -138,7 +138,10 @@ class DataPolicyController(BaseController):
             async with session_maker() as session:
                 mnemonic = payload.policy_mnemonic
                 application = None
+                registry_application_id = payload.registry_application_id
                 if payload.application_id is not None:
+                    from sqlalchemy import select
+
                     from iam_core.models.application import Application
                     from iam_core.models.enum import ApplicationType
                     from iam_core.user_auth.helpers.data_policy_role_helper import (
@@ -158,9 +161,32 @@ class DataPolicyController(BaseController):
                             application.application_mnemonic,
                             mnemonic,
                         )
+                        # Resolve registry scope for AGC_ (id or mnemonic from staff UI).
+                        if registry_application_id is None and payload.registry_client_id:
+                            registry_application_id = await session.scalar(
+                                select(Application.id).where(
+                                    Application.application_mnemonic == payload.registry_client_id.strip(),
+                                    Application.application_type == ApplicationType.STAFF.value,
+                                    Application.active.is_(True),
+                                    Application.is_registry.is_(True),
+                                )
+                            )
+                            if registry_application_id is None:
+                                raise BadRequestError(message="Registry application not found")
+                        if registry_application_id is not None:
+                            registry_app = await session.get(Application, registry_application_id)
+                            if (
+                                registry_app is None
+                                or registry_app.application_type != ApplicationType.STAFF.value
+                                or not registry_app.is_registry
+                                or not registry_app.active
+                            ):
+                                raise BadRequestError(message="Registry application not found")
                     else:
                         bare = strip_policy_prefix(mnemonic)
                         mnemonic = f"{DP_ROLE_PREFIX}{bare}"
+                        # DP_ rows already live under the registry app.
+                        registry_application_id = None
 
                 policy = await self._service.add_policy(
                     policy_mnemonic=mnemonic,
@@ -171,6 +197,7 @@ class DataPolicyController(BaseController):
                     policy_type=payload.policy_type,
                     policy_target=payload.policy_target,
                     application_id=payload.application_id,
+                    registry_application_id=registry_application_id,
                 )
 
                 if payload.application_id is not None:

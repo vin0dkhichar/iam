@@ -21,6 +21,8 @@ export async function POST(req: NextRequest) {
         policy_type: body?.policy_type,
         policy_filter_expression: body?.policy_filter_expression ?? {},
         application_id: body?.application_id,
+        registry_application_id: body?.registry_application_id ?? null,
+        registry_client_id: body?.registry_client_id ?? null,
       },
     }),
     transformResponse: (responseBody) => responseBody?.response_payload?.policy,

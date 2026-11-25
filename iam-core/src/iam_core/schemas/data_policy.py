@@ -127,7 +127,11 @@ class DataPolicyData(BaseModel):
     )
     application_id: Optional[int] = Field(
         None,
-        description="Application ID from IAM; links policy to specific application",
+        description="Owning application ID (staff app or agency)",
+    )
+    registry_application_id: Optional[int] = Field(
+        None,
+        description="Registry staff app id for AGC_/AGT_ scope; null for DP_",
     )
     sync_status: Optional[str] = Field(
         None,
@@ -178,7 +182,15 @@ class AddPolicyRequestPayload(BaseModel):
     )
     application_id: Optional[int] = Field(
         None,
-        description="Application ID from IAM; links policy to specific application",
+        description="Owning application ID (staff app or agency)",
+    )
+    registry_application_id: Optional[int] = Field(
+        None,
+        description="Registry staff app id when creating AGC_/AGT_ for a registry",
+    )
+    registry_client_id: Optional[str] = Field(
+        None,
+        description="Registry app mnemonic (e.g. farmer-registry-staff-portal); resolved to id",
     )
 
     @model_validator(mode="after")
@@ -215,6 +227,13 @@ class EvaluateExpressionRequestPayload(BaseModel):
     policy_mnemonics: List[str] = Field(
         default_factory=list,
         description="Unused. Clients carry the mnemonics.",
+    )
+    registry_client_id: Optional[str] = Field(
+        None,
+        description=(
+            "When set, agent-app AGC_/AGT_ results are limited to policies whose "
+            "registry_application_id matches this registry staff mnemonic"
+        ),
     )
 
 

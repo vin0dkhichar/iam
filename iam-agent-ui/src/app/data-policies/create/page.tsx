@@ -176,6 +176,12 @@ export default function CreateAgentDataPolicyPage() {
           policy_description: policyDescription.trim(),
           policy_type: policyType,
           policy_filter_expression: policyFilterExpression,
+          ...(registryAppId
+            ? {
+                registry_application_id: Number(registryAppId) || undefined,
+                registry_client_id: selectedRegistry?.application_mnemonic || undefined,
+              }
+            : {}),
         }),
       });
 

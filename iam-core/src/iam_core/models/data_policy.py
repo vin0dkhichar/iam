@@ -13,7 +13,10 @@ class DataPolicy(BaseORMModel):
     policy_mnemonic is published to Keycloak as a client role DP_<policy_mnemonic>.
     The same mnemonic may appear on multiple rows (one per policy_target).
     register_id is required for REGISTER_RECORD policies; null for GEO/ATTRIBUTE.
-    application_id links the policy to a specific application in IAM.
+    application_id links the policy to its owning IAM application (staff app or agency).
+    registry_application_id scopes AGC_/AGT_ policies to a registry staff app
+    (farmer-registry-staff-portal, …); null for DP_ rows where application_id is
+    already the registry.
     """
 
     __tablename__ = "data_policies"
@@ -35,6 +38,7 @@ class DataPolicy(BaseORMModel):
     policy_type: Mapped[str] = mapped_column(String, nullable=False)
     policy_filter_expression: Mapped[JSON] = mapped_column(JSON, nullable=False)
     application_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    registry_application_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     __table_args__ = (
         Index(

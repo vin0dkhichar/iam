@@ -80,6 +80,8 @@ class AddAgentPolicyBody(BaseModel):
     policy_target: str = "ATTRIBUTE"
     register_id: str | None = None
     policy_filter_expression: dict | None = None
+    registry_application_id: int | None = None
+    registry_client_id: str | None = None
 
 
 class RemoveAgentPolicyBody(BaseModel):

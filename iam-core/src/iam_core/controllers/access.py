@@ -36,6 +36,7 @@ class AccessController(BaseController):
             policies = await self._policies.policies_for_client_roles(
                 session,
                 [(client.client_id, client.policy_mnemonics) for client in body.clients],
+                registry_client_id=body.registry_client_id,
             )
         return EvaluateExpressionResponsePayload(policies=policies)
 

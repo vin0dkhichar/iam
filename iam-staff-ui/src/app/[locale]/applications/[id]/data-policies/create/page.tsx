@@ -173,6 +173,12 @@ export default function CreateDataPolicyPage({ params }: { params: Promise<{ id:
           policy_type: policyType,
           policy_filter_expression: policyFilterExpression,
           application_id: applicationId,
+          ...(isAgency && registryAppIdParam
+            ? {
+                registry_application_id: Number(registryAppIdParam) || undefined,
+                registry_client_id: selectedRegistry?.application_mnemonic || undefined,
+              }
+            : {}),
         }),
       });
 

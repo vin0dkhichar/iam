@@ -100,6 +100,7 @@ class DataPolicyService(BaseService):
         session: AsyncSession,
         policy_target: str = "REGISTER_RECORD",
         application_id: int | None = None,
+        registry_application_id: int | None = None,
     ) -> DataPolicyData:
         normalized_expression = self._validate_policy_filter_expression(policy_filter_expression)
 
@@ -136,6 +137,7 @@ class DataPolicyService(BaseService):
             policy_type=policy_type.value,
             policy_filter_expression=normalized_expression,
             application_id=application_id,
+            registry_application_id=registry_application_id,
         )
         session.add(policy)
         await session.flush()
@@ -217,18 +219,33 @@ class DataPolicyService(BaseService):
         self,
         session: AsyncSession,
         clients: list[tuple[str, list[str]]],
+        registry_client_id: str | None = None,
     ) -> list[DataPolicyData]:
         """Load policies for every token client in one pass.
 
         Staff/DP_ roles are scoped to the Keycloak client (== application mnemonic).
         AGC_/AGT_ roles live on ``agent-app``; IAM still stores those policies under
         the agency application, so agent-app is resolved by mnemonic alone.
+        When ``registry_client_id`` is set, agent-app results are limited to rows
+        whose ``registry_application_id`` matches that registry staff app.
         """
         from iam_core.helpers.agency import AGENT_APP_CLIENT
 
         pairs = [(client_id, list(mnemonics)) for client_id, mnemonics in clients if client_id and mnemonics]
         if not pairs:
             return []
+
+        registry_app_id: int | None = None
+        registry_mnemonic = (registry_client_id or "").strip()
+        if registry_mnemonic:
+            registry_app_id = await session.scalar(
+                select(Application.id).where(
+                    Application.application_mnemonic == registry_mnemonic,
+                    Application.application_type == ApplicationType.STAFF.value,
+                    Application.active.is_(True),
+                    Application.is_registry.is_(True),
+                )
+            )
 
         agent_app_mnemonics: list[str] = []
         app_pairs: list[tuple[str, list[str]]] = []
@@ -255,13 +272,25 @@ class DataPolicyService(BaseService):
                 .scalars()
                 .all()
             )
+            if registry_mnemonic:
+                # Calling registry asked for its slice only.
+                policies = [
+                    policy
+                    for policy in policies
+                    if policy.registry_application_id is not None
+                    and registry_app_id is not None
+                    and policy.registry_application_id == registry_app_id
+                ]
             by_mnemonic: dict[str, list[DataPolicy]] = defaultdict(list)
             for policy in policies:
                 by_mnemonic[policy.policy_mnemonic].append(policy)
             for mnemonic in wanted:
                 rows = by_mnemonic.get(mnemonic)
                 if not rows:
-                    missing.append(f"{AGENT_APP_CLIENT}: {mnemonic}")
+                    # Missing only when no registry filter — otherwise the role
+                    # may simply not apply to this registry.
+                    if not registry_mnemonic:
+                        missing.append(f"{AGENT_APP_CLIENT}: {mnemonic}")
                 else:
                     matched.extend(rows)
 
@@ -354,6 +383,7 @@ class DataPolicyService(BaseService):
             policy_type=DataPolicyType(policy.policy_type),
             policy_filter_expression=policy.policy_filter_expression,
             application_id=policy.application_id,
+            registry_application_id=policy.registry_application_id,
             sync_status=status,
             sync_error=error,
         )

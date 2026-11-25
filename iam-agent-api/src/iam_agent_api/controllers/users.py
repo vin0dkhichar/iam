@@ -301,6 +301,27 @@ class UsersController(BaseController):
             register_id = body.register_id.strip() if body.register_id else None
             if policy_target != "REGISTER_RECORD":
                 register_id = None
+            registry_application_id = body.registry_application_id
+            if registry_application_id is None and body.registry_client_id:
+                registry_application_id = await session.scalar(
+                    select(Application.id).where(
+                        Application.application_mnemonic == body.registry_client_id.strip(),
+                        Application.application_type == ApplicationType.STAFF.value,
+                        Application.active.is_(True),
+                        Application.is_registry.is_(True),
+                    )
+                )
+                if registry_application_id is None:
+                    raise BadRequestError(message="Registry application not found")
+            if registry_application_id is not None:
+                registry_app = await session.get(Application, registry_application_id)
+                if (
+                    registry_app is None
+                    or registry_app.application_type != ApplicationType.STAFF.value
+                    or not registry_app.is_registry
+                    or not registry_app.active
+                ):
+                    raise BadRequestError(message="Registry application not found")
             policy = await DataPolicyService().add_policy(
                 policy_mnemonic=mnemonic,
                 policy_description=body.policy_description,
@@ -310,6 +331,7 @@ class UsersController(BaseController):
                 policy_type=policy_type,
                 policy_target=policy_target,
                 application_id=application.id,
+                registry_application_id=registry_application_id,
             )
             existing_role = await session.scalar(
                 select(Role).where(
