@@ -7,11 +7,11 @@ import { useTranslations } from "next-intl";
 import { toast } from "react-toastify";
 import { useFetch } from "@/shared/hooks/useFetch";
 import {
-  useAgency,
   useAllAttributes,
   useAllRegister,
   useG2pGeoLevels,
   useRegisterFields,
+  useRegistryApplications,
   type Register,
 } from "@/features/data-policy/hooks";
 import CustomDropdown from "@/features/data-policy/components/CustomDropdown";
@@ -46,8 +46,10 @@ export default function CreateAgentDataPolicyPage() {
 
   const policyTarget = searchParams.get("policyTarget") || "REGISTER_RECORD";
   const registerIdParam = searchParams.get("registerId") || "";
+  const registryAppIdParam = searchParams.get("registryAppId") || "";
 
   const [registerId, setRegisterId] = useState(registerIdParam);
+  const [registryAppId, setRegistryAppId] = useState(registryAppIdParam);
   const [policyMnemonic, setPolicyMnemonic] = useState("");
   const [policyDescription, setPolicyDescription] = useState("");
   const [policyType, setPolicyType] = useState<string>("ALLOW");
@@ -58,12 +60,19 @@ export default function CreateAgentDataPolicyPage() {
   const isRegisterTarget = policyTarget === "REGISTER_RECORD";
   const isGeoTarget = policyTarget === "GEO";
   const isRegisterFixed = isRegisterTarget && !!registerIdParam;
+  const isRegistryFixed = isRegisterTarget && !!registryAppIdParam;
 
-  const { apiUrl: agencyApiUrl } = useAgency();
-  const { registers, loading: registersLoading } = useAllRegister(agencyApiUrl, 1, 100);
+  const { registries, loading: registriesLoading } = useRegistryApplications(isRegisterTarget);
+  const selectedRegistry = useMemo(
+    () => registries.find((item) => String(item.id) === String(registryAppId)),
+    [registries, registryAppId],
+  );
+  const registerApiUrl =
+    selectedRegistry?.agent_api_url || selectedRegistry?.staff_api_url || null;
+  const { registers, loading: registersLoading } = useAllRegister(registerApiUrl, 1, 100);
   const { fields: registerFields, loading: registerFieldsLoading } = useRegisterFields(
     isRegisterTarget ? registerId : "",
-    agencyApiUrl,
+    registerApiUrl,
   );
   const { attributes, loading: attributesLoading } = useAllAttributes(1, 500);
   const { geoLevels: g2pGeoLevels, loading: g2pGeoLevelsLoading } = useG2pGeoLevels();
@@ -73,13 +82,13 @@ export default function CreateAgentDataPolicyPage() {
   );
 
   useEffect(() => {
-    if (!isRegisterTarget || registersLoading || !registers?.length) {
+    if (!isRegisterTarget || !registryAppId || registersLoading || !registers?.length) {
       return;
     }
     if (!registerIdParam) {
       setRegisterId((current) => current || registers[0].register_id);
     }
-  }, [isRegisterTarget, registers, registersLoading, registerIdParam]);
+  }, [isRegisterTarget, registryAppId, registers, registersLoading, registerIdParam]);
 
   useEffect(() => {
     if (isGeoTarget) {
@@ -88,6 +97,15 @@ export default function CreateAgentDataPolicyPage() {
     }
     setFilterRoot(createDefaultFilterRoot());
   }, [registerId, policyTarget, isGeoTarget]);
+
+  const registryOptions = useMemo(
+    () =>
+      registries.map((registry) => ({
+        label: registry.application_description || registry.application_mnemonic,
+        value: String(registry.id),
+      })),
+    [registries],
+  );
 
   const registerOptions = useMemo(
     () =>
@@ -116,7 +134,12 @@ export default function CreateAgentDataPolicyPage() {
   }, [policyTarget, attributesLoading, registerFieldsLoading]);
 
   const handleCancel = () => {
-    router.push(`/?menu=agent-data-policies&policyTarget=${policyTarget}${registerId ? `&registerId=${registerId}` : ""}`);
+    const params = new URLSearchParams();
+    params.set("menu", "agent-data-policies");
+    params.set("policyTarget", policyTarget);
+    if (registryAppId) params.set("registryAppId", registryAppId);
+    if (registerId) params.set("registerId", registerId);
+    router.push(`/?${params.toString()}`);
   };
 
   const handleSubmit = async () => {
@@ -210,15 +233,29 @@ export default function CreateAgentDataPolicyPage() {
         <h2 className="mb-4 text-base font-semibold text-black">{t("policy_details")}</h2>
         <div className="grid max-w-3xl grid-cols-1 gap-4 md:grid-cols-2">
           {isRegisterTarget ? (
-            <CustomDropdown
-              label={t("register")}
-              options={registerOptions}
-              value={registerId}
-              onChange={setRegisterId}
-              loading={registersLoading}
-              placeholder={t("select_register")}
-              disabled={isRegisterFixed}
-            />
+            <>
+              <CustomDropdown
+                label={t("select_registry")}
+                options={registryOptions}
+                value={registryAppId}
+                onChange={(value) => {
+                  setRegistryAppId(value);
+                  setRegisterId("");
+                }}
+                loading={registriesLoading}
+                placeholder={t("select_registry")}
+                disabled={isRegistryFixed}
+              />
+              <CustomDropdown
+                label={t("register")}
+                options={registerOptions}
+                value={registerId}
+                onChange={setRegisterId}
+                loading={registersLoading}
+                placeholder={t("select_register")}
+                disabled={isRegisterFixed || !registryAppId}
+              />
+            </>
           ) : null}
           <CustomDropdown
             label={t("policy_type")}

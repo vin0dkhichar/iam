@@ -4,6 +4,7 @@ export { useAllAttributes } from './useAllAttributes';
 export { useG2pGeoLevels } from './useG2pGeoLevels';
 export { useRegisterFields } from './useRegisterFields';
 export { useGeoLevelValues } from './useGeoLevelValues';
+export { useRegistryApplications } from './useRegistryApplications';
 export type { DataPolicy } from './usePolicies';
 export type { Register } from './useAllRegister';
 export type { Attribute, PaginationMeta } from './useAllAttributes';

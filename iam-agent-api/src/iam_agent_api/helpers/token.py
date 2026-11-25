@@ -10,7 +10,7 @@ from iam_core.user_auth.middleware.validate_and_refresh import ValidateAndRefres
 
 class AgentTokenMiddleware(ValidateAndRefreshTokenMiddleware):
     def __init__(self, app, **kwargs):
-        super().__init__(app, application_type=ApplicationType.AGENT.value, **kwargs)
+        super().__init__(app, application_types=[ApplicationType.AGENT.value], **kwargs)
 
     async def _authenticate_with_refresh(self, request: Request):
         principal, refreshed_tokens = await super()._authenticate_with_refresh(request)

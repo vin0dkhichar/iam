@@ -90,7 +90,13 @@ class UserAccessController(BaseController):
                 "application_url": (
                     app.application_url if app.application_mnemonic in allowed_mnemonics else None
                 ),
-                "api_url": (app.api_url if app.application_mnemonic in allowed_mnemonics else None),
+                "is_registry": bool(app.is_registry),
+                "staff_api_url": (
+                    app.staff_api_url if app.application_mnemonic in allowed_mnemonics else None
+                ),
+                "agent_api_url": (
+                    app.agent_api_url if app.application_mnemonic in allowed_mnemonics else None
+                ),
             }
             for app in apps
         ]
@@ -158,7 +164,9 @@ class UserAccessController(BaseController):
 
         if existing is not None:
             existing.application_url = request.application_url
-            existing.api_url = request.api_url
+            existing.is_registry = bool(request.is_registry)
+            existing.staff_api_url = request.staff_api_url
+            existing.agent_api_url = request.agent_api_url
             existing.application_description = request.application_description
             existing.icon_base64 = request.icon_base64
             existing.width = request.width
@@ -170,7 +178,9 @@ class UserAccessController(BaseController):
         app = Application(
             application_mnemonic=request.application_mnemonic,
             application_url=request.application_url,
-            api_url=request.api_url,
+            is_registry=bool(request.is_registry),
+            staff_api_url=request.staff_api_url,
+            agent_api_url=request.agent_api_url,
             application_description=request.application_description,
             icon_base64=request.icon_base64,
             width=request.width,

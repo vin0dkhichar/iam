@@ -104,5 +104,18 @@ class AssignRolesResponse(BaseModel):
 class AgencyResponse(BaseModel):
     agency_id: str
     name: str | None = None
-    # Registry staff API base URL for REGISTER_RECORD policy field pickers (same as staff app.api_url).
-    api_url: str | None = None
+    # Optional legacy agency-level URL; prefer registry agent_api_url for AGT_ builders.
+    staff_api_url: str | None = None
+    agent_api_url: str | None = None
+
+
+class RegistryApplicationItem(BaseModel):
+    id: int
+    application_mnemonic: str
+    application_description: str | None = None
+    staff_api_url: str | None = None
+    agent_api_url: str | None = None
+
+
+class RegistryApplicationsResponse(BaseModel):
+    items: list[RegistryApplicationItem] = []

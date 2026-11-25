@@ -551,7 +551,7 @@ async def test_resolve_permission_fetch_permissions_paths():
 
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
-    mock_response.json.return_value = {"permissions": ["p1", "p2"]}
+    mock_response.json.return_value = {"permissions": {"portal": ["p1", "p2"]}}
     with (
         patch(
             "iam_core.user_auth.middleware.resolve_permissions.Settings.get_config",

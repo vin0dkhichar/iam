@@ -7,6 +7,7 @@ from .config import Settings
 _config = Settings.get_config()
 
 from iam_core.models import LoginProvider
+from iam_core.models.enum import ApplicationType
 from iam_core.user_auth.app import Initializer as AuthInitializer
 from iam_core.user_auth.middleware import ValidateAndRefreshTokenMiddleware
 
@@ -17,7 +18,10 @@ class Initializer(AuthInitializer):
     def initialize(self, **kwargs):
         super().initialize()
 
-        self.return_app().add_middleware(ValidateAndRefreshTokenMiddleware)
+        self.return_app().add_middleware(
+            ValidateAndRefreshTokenMiddleware,
+            application_types=[ApplicationType.BENEFICIARY.value],
+        )
 
         AuthController().post_init()
 

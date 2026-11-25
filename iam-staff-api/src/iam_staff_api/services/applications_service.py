@@ -25,7 +25,9 @@ class ApplicationsService(BaseService):
             application_type=app.application_type,
             application_description=app.application_description,
             application_url=app.application_url,
-            api_url=app.api_url,
+            is_registry=bool(app.is_registry),
+            staff_api_url=app.staff_api_url,
+            agent_api_url=app.agent_api_url,
             icon_base64=app.icon_base64,
             width=app.width,
             order=app.order,
@@ -40,7 +42,11 @@ class ApplicationsService(BaseService):
         )
 
     async def get_applications(
-        self, page: int, page_size: int, application_type: str | None = None
+        self,
+        page: int,
+        page_size: int,
+        application_type: str | None = None,
+        is_registry: bool | None = None,
     ) -> tuple[list[ApplicationData], int]:
         async_session = get_async_session_maker()
         async with async_session() as session:
@@ -50,6 +56,8 @@ class ApplicationsService(BaseService):
             # Staff applications: active-only list (status column removed from UI).
             if resolved_type != ApplicationType.AGENT.value:
                 stmt = stmt.where(Application.active.is_(True))
+            if is_registry is not None:
+                stmt = stmt.where(Application.is_registry.is_(is_registry))
             # stmt = select(Application).where(
             #     Application.application_type == (application_type or ApplicationType.STAFF.value),
             #     Application.active.is_(True),
@@ -102,7 +110,9 @@ class ApplicationsService(BaseService):
                 application_type=application_type,
                 application_description=payload.application_description,
                 application_url=payload.application_url,
-                api_url=payload.api_url,
+                is_registry=bool(payload.is_registry) if not is_agent else False,
+                staff_api_url=payload.staff_api_url,
+                agent_api_url=payload.agent_api_url,
                 icon_base64=payload.icon_base64,
                 order=payload.order,
                 width=payload.width,
@@ -129,7 +139,9 @@ class ApplicationsService(BaseService):
             for field in (
                 "application_description",
                 "application_url",
-                "api_url",
+                "is_registry",
+                "staff_api_url",
+                "agent_api_url",
                 # "icon_base64",  # icon changes disabled from staff UI
                 "order",
                 "width",

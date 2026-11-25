@@ -12,7 +12,9 @@ export function useApplicationData(applicationId: number) {
   const [form, setForm] = useState<ApplicationForm>({
     application_description: "",
     application_url: "",
-    api_url: "",
+    is_registry: false,
+    staff_api_url: "",
+    agent_api_url: "",
     order: "",
     width: "",
     icon_base64: "",
@@ -43,7 +45,9 @@ export function useApplicationData(applicationId: number) {
       setForm({
         application_description: data?.application_description || "",
         application_url: data?.application_url || "",
-        api_url: data?.api_url || "",
+        is_registry: Boolean(data?.is_registry),
+        staff_api_url: data?.staff_api_url || "",
+        agent_api_url: data?.agent_api_url || "",
         order: data?.order != null ? String(data.order) : "",
         width: data?.width != null ? String(data.width) : "",
         icon_base64: data?.icon_base64 || "",
@@ -70,7 +74,9 @@ export function useApplicationData(applicationId: number) {
           id: applicationId,
           application_description: form.application_description || null,
           application_url: form.application_url || null,
-          api_url: form.api_url || null,
+          is_registry: form.is_registry,
+          staff_api_url: form.staff_api_url || null,
+          agent_api_url: form.agent_api_url || null,
         };
         if (form.order !== "") payload.order = Number(form.order);
         if (form.width !== "") payload.width = Number(form.width);

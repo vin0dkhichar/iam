@@ -68,6 +68,7 @@ class Initializer(AuthInitializer):
         # CSRF -> ValidateAndRefresh -> DataPolicy -> ResolvePermission -> app
         self.return_app().add_middleware(
             ResolvePermissionMiddleware,
+            client_id=_config.keycloak_client_id,
             permissions_api_url=_config.auth_provider_api_url,
             allow_by_default=True,
         )
@@ -79,7 +80,7 @@ class Initializer(AuthInitializer):
             )
         self.return_app().add_middleware(
             ValidateAndRefreshTokenMiddleware,
-            application_type=ApplicationType.STAFF.value,
+            application_types=[ApplicationType.STAFF.value],
         )
         self.return_app().add_middleware(
             CsrfMiddleware,

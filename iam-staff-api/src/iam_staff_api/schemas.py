@@ -16,7 +16,9 @@ class PortalApplicationResponse(BaseModel):
     application_mnemonic: str
     application_description: Optional[str] = None
     application_url: Optional[str] = None
-    api_url: Optional[str] = None
+    is_registry: bool = False
+    staff_api_url: Optional[str] = None
+    agent_api_url: Optional[str] = None
     icon_base64: Optional[str] = None
     width: Optional[int] = None
     order: Optional[int] = None
@@ -51,7 +53,9 @@ class RegisterPortalApplicationRequest(BaseModel):
 
     application_mnemonic: str
     application_url: str
-    api_url: Optional[str] = None
+    is_registry: bool = True
+    staff_api_url: Optional[str] = None
+    agent_api_url: Optional[str] = None
     application_description: Optional[str] = None
     icon_base64: Optional[str] = None
     width: Optional[int] = None
@@ -96,7 +100,9 @@ class ApplicationData(BaseModel):
     application_type: str = "staff"
     application_description: Optional[str] = None
     application_url: Optional[str] = None
-    api_url: Optional[str] = None
+    is_registry: bool = False
+    staff_api_url: Optional[str] = None
+    agent_api_url: Optional[str] = None
     icon_base64: Optional[str] = None
     width: Optional[int] = None
     order: Optional[int] = None
@@ -115,7 +121,9 @@ class ApplicationCreatePayload(BaseModel):
     application_type: str = "staff"
     application_description: Optional[str] = None
     application_url: Optional[str] = None
-    api_url: Optional[str] = None
+    is_registry: bool = False
+    staff_api_url: Optional[str] = None
+    agent_api_url: Optional[str] = None
     icon_base64: Optional[str] = None
     order: Optional[int] = None
     width: Optional[int] = None
@@ -125,7 +133,9 @@ class ApplicationUpdatePayload(BaseModel):
     id: int
     application_description: Optional[str] = None
     application_url: Optional[str] = None
-    api_url: Optional[str] = None
+    is_registry: Optional[bool] = None
+    staff_api_url: Optional[str] = None
+    agent_api_url: Optional[str] = None
     icon_base64: Optional[str] = None
     order: Optional[int] = None
     width: Optional[int] = None
@@ -360,6 +370,8 @@ class ApplicationResponse(G2PResponse):
 
 class ApplicationsListPayload(BaseModel):
     application_type: Optional[str] = None
+    # When set, only registry (or non-registry) staff applications are returned.
+    is_registry: Optional[bool] = None
 
 
 class GetApplicationsRequestBody(G2PRequestBody):

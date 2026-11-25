@@ -218,7 +218,7 @@ export default function ApplicationDetailPage() {
       <div style={{ display: tab === "data-policies" ? "block" : "none" }}>
         <DataPoliciesTab
           applicationId={applicationId}
-          apiUrl={app.api_url}
+          apiUrl={app.staff_api_url}
           isActive={tab === "data-policies"}
           isAgency={isAgent}
         />

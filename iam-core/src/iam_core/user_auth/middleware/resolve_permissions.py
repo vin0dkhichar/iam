@@ -44,7 +44,7 @@ def _permissions_for_roles_key_builder(func, namespace: str, *args, **kwargs) ->
 async def _cached_fetch_permissions_for_roles(
     clients: tuple[tuple[str, tuple[str, ...]], ...],
     permissions_api_url: str,
-) -> set[str]:
+) -> dict[str, list[str]]:
     endpoint = permissions_api_url.rstrip("/") + "/user-access/get_permissions_for_roles"
     body = {
         "clients": [{"client_id": client_id, "role_mnemonics": list(roles)} for client_id, roles in clients]
@@ -63,21 +63,27 @@ async def _cached_fetch_permissions_for_roles(
         raise ForbiddenError(message=str(message)) from exc
     except httpx.HTTPError as exc:
         raise ForbiddenError(message="Forbidden. Unable to fetch user permissions.") from exc
-    return set((response.json() or {}).get("permissions") or [])
+    permissions = (response.json() or {}).get("permissions") or {}
+    if isinstance(permissions, dict):
+        return {str(client_id): list(names or []) for client_id, names in permissions.items()}
+    # Legacy flat list — treat as unscoped; caller with client_id will ignore.
+    return {"": list(permissions)} if isinstance(permissions, list) else {}
 
 
 class ResolvePermissionMiddleware(BaseHTTPMiddleware):
-    """Enforce ``@require_permissions`` using each client and its roles on the token.
+    """Enforce ``@require_permissions`` using roles for this service's client.
 
-    ``permissions_api_url`` is the audience API that maps those roles to
-    permissions. When it is omitted, the staff ``auth_provider_api_url`` setting
-    is used.
+    ``client_id`` is the application mnemonic / Keycloak client from env
+    (e.g. ``registry-staff-portal``, ``master-data``, ``iam-staff-ui``). Only
+    permissions returned for that client are used for the route check — other
+    clients on the token are ignored.
     """
 
     def __init__(
         self,
         app,
         *,
+        client_id: str | None = None,
         permissions_api_url: str | None = None,
         allow_by_default: bool = True,
         state_key: str | RequestStateKey = RequestStateKey.AUTH,
@@ -85,6 +91,7 @@ class ResolvePermissionMiddleware(BaseHTTPMiddleware):
         required_permissions_resolver: Callable[[Request, Any], set[str] | None] | None = None,
     ):
         super().__init__(app)
+        self._client_id = (client_id or "").strip() or None
         self._permissions_api_url = permissions_api_url
         self._allow_by_default = allow_by_default
         self._state_key = str(state_key)
@@ -106,6 +113,13 @@ class ResolvePermissionMiddleware(BaseHTTPMiddleware):
                 pairs.append((str(client_id), names))
         return tuple(pairs)
 
+    def _clients_for_this_service(
+        self, clients: tuple[tuple[str, tuple[str, ...]], ...]
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        if not self._client_id:
+            return clients
+        return tuple(pair for pair in clients if pair[0] == self._client_id)
+
     async def _fetch_permissions_for_roles(
         self, clients: tuple[tuple[str, tuple[str, ...]], ...]
     ) -> set[str]:
@@ -114,7 +128,10 @@ class ResolvePermissionMiddleware(BaseHTTPMiddleware):
         api_url = self._api_url()
         if not api_url:
             raise ForbiddenError(message="Forbidden. auth_provider_api_url is not configured.")
-        return await _cached_fetch_permissions_for_roles(clients, api_url)
+        by_client = await _cached_fetch_permissions_for_roles(clients, api_url)
+        if self._client_id:
+            return set(by_client.get(self._client_id) or [])
+        return {name for names in by_client.values() for name in names}
 
     async def dispatch(self, request: Request, call_next):
         try:
@@ -139,7 +156,7 @@ class ResolvePermissionMiddleware(BaseHTTPMiddleware):
             if not isinstance(principal, AuthPrincipal):
                 raise UnauthorizedError()
 
-            clients = self._clients_from_token(principal.client_roles)
+            clients = self._clients_for_this_service(self._clients_from_token(principal.client_roles))
             user_permissions = await self._fetch_permissions_for_roles(clients)
 
             if required_permissions and not required_permissions.issubset(user_permissions):

@@ -42,7 +42,7 @@ async def validate_request_token(
     request: Request,
     jwt_token: str,
     jwt_id_token: str | None = None,
-    application_type: str | None = None,
+    application_types: list[str] | None = None,
 ) -> AuthCredentials:
     """Full signature/audience validation via TokenValidatorService."""
     from iam_core.services import TokenValidatorService
@@ -57,5 +57,5 @@ async def validate_request_token(
         jwt_token=jwt_token,
         jwt_id_token=jwt_id_token,
         api_auth_settings=api_auth_settings,
-        application_type=application_type,
+        application_types=application_types,
     )

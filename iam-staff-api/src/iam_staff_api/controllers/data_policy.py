@@ -137,27 +137,30 @@ class DataPolicyController(BaseController):
             session_maker = get_async_session_maker()
             async with session_maker() as session:
                 mnemonic = payload.policy_mnemonic
+                application = None
                 if payload.application_id is not None:
                     from iam_core.models.application import Application
                     from iam_core.models.enum import ApplicationType
                     from iam_core.user_auth.helpers.data_policy_role_helper import (
                         AGC_ROLE_PREFIX,
                         DP_ROLE_PREFIX,
+                        agency_scoped_policy_mnemonic,
+                        strip_policy_prefix,
                     )
 
                     application = await session.get(Application, payload.application_id)
                     if application is None:
                         raise BadRequestError(message="Application not found")
-                    prefix = (
-                        AGC_ROLE_PREFIX
-                        if application.application_type == ApplicationType.AGENT.value
-                        else DP_ROLE_PREFIX
-                    )
-                    bare = mnemonic
-                    for known in (DP_ROLE_PREFIX, AGC_ROLE_PREFIX):
-                        if bare.startswith(known):
-                            bare = bare[len(known) :]
-                    mnemonic = f"{prefix}{bare}"
+                    if application.application_type == ApplicationType.AGENT.value:
+                        # AGC_<agency>_<name> — roles land on agent-app Keycloak client.
+                        mnemonic = agency_scoped_policy_mnemonic(
+                            AGC_ROLE_PREFIX,
+                            application.application_mnemonic,
+                            mnemonic,
+                        )
+                    else:
+                        bare = strip_policy_prefix(mnemonic)
+                        mnemonic = f"{DP_ROLE_PREFIX}{bare}"
 
                 policy = await self._service.add_policy(
                     policy_mnemonic=mnemonic,

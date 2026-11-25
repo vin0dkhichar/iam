@@ -5,6 +5,7 @@ import { useRbac } from "@/context/RbacContext";
 import {
   Button,
   Card,
+  CheckboxField,
   FormActions,
   IconBase64Field,
   InputField,
@@ -124,13 +125,39 @@ export default function ApplicationTab({
             className="col-span-full"
           />
 
+          <CheckboxField
+            label={t("isRegistry")}
+            checked={Boolean(appForm.is_registry)}
+            onChange={(checked) =>
+              setAppForm((f: typeof appForm) => ({
+                ...f,
+                is_registry: checked,
+              }))
+            }
+            disabled={isDisabled}
+            className="col-span-full"
+          />
+
           <InputField
-            label="API URL"
-            value={appForm.api_url}
+            label={t("staffApiUrl")}
+            value={appForm.staff_api_url}
             onChange={(value) =>
               setAppForm((f: typeof appForm) => ({
                 ...f,
-                api_url: value,
+                staff_api_url: value,
+              }))
+            }
+            disabled={isDisabled}
+            className="col-span-full"
+          />
+
+          <InputField
+            label={t("agentApiUrl")}
+            value={appForm.agent_api_url}
+            onChange={(value) =>
+              setAppForm((f: typeof appForm) => ({
+                ...f,
+                agent_api_url: value,
               }))
             }
             disabled={isDisabled}

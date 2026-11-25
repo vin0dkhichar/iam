@@ -195,7 +195,7 @@ async def test_get_application_permissions_for_user_filters_by_mnemonic(controll
 
 
 @pytest.mark.asyncio
-async def test_get_permissions_for_roles_aggregates_unique_permissions():
+async def test_get_permissions_for_roles_maps_permissions_per_client():
     access = AccessController()
     session, _ = make_mock_session(make_execute_result())
     with (
@@ -205,13 +205,13 @@ async def test_get_permissions_for_roles_aggregates_unique_permissions():
         ),
         patch(
             "iam_core.controllers.access.permissions_for_client_roles",
-            AsyncMock(return_value=["register:edit", "register:view"]),
+            AsyncMock(return_value={"registry": ["register:edit", "register:view"]}),
         ),
     ):
         response = await access.permissions_for_roles(
             RoleLookup(clients=[ClientRoles(client_id="registry", role_mnemonics=["Data Editor", "Admin"])])
         )
-    assert response.permissions == ["register:edit", "register:view"]
+    assert response.permissions == {"registry": ["register:edit", "register:view"]}
 
 
 @pytest.mark.asyncio
@@ -252,7 +252,7 @@ async def test_register_staff_portal_application_creates_new_application(control
     payload = RegisterPortalApplicationRequest(
         application_mnemonic="registry-staff-portal",
         application_url="https://registry.example.com",
-        api_url="https://staff-registry.example.com",
+        staff_api_url="https://staff-registry.example.com",
         permissions=[RegisterApplicationPermission(permission_mnemonic="register:view")],
         roles=[
             RegisterApplicationRole(
@@ -316,7 +316,7 @@ async def test_register_staff_portal_application_updates_existing_application(co
 
     assert response.created is False
     assert existing.application_description == "Updated"
-    assert existing.api_url is None
+    assert existing.staff_api_url is None
     assert existing.is_self_registered is True
 
 

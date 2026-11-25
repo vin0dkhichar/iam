@@ -220,63 +220,105 @@ class DataPolicyService(BaseService):
     ) -> list[DataPolicyData]:
         """Load policies for every token client in one pass.
 
-        A client that is not an application is ignored. When the client is an
-        application and a policy mnemonic is not stored for it, that is an error.
+        Staff/DP_ roles are scoped to the Keycloak client (== application mnemonic).
+        AGC_/AGT_ roles live on ``agent-app``; IAM still stores those policies under
+        the agency application, so agent-app is resolved by mnemonic alone.
         """
+        from iam_core.helpers.agency import AGENT_APP_CLIENT
+
         pairs = [(client_id, list(mnemonics)) for client_id, mnemonics in clients if client_id and mnemonics]
         if not pairs:
             return []
 
-        applications = (
-            (
-                await session.execute(
-                    select(Application).where(
-                        Application.application_mnemonic.in_([client_id for client_id, _ in pairs])
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        by_mnemonic = {application.application_mnemonic: application for application in applications}
-        known = [
-            (by_mnemonic[client_id], mnemonics) for client_id, mnemonics in pairs if client_id in by_mnemonic
-        ]
-        if not known:
-            return []
+        agent_app_mnemonics: list[str] = []
+        app_pairs: list[tuple[str, list[str]]] = []
+        for client_id, mnemonics in pairs:
+            if client_id == AGENT_APP_CLIENT:
+                agent_app_mnemonics.extend(mnemonics)
+            else:
+                app_pairs.append((client_id, mnemonics))
 
-        wanted = {mnemonic for _, mnemonics in known for mnemonic in mnemonics}
-        policies = (
-            (
-                await session.execute(
-                    select(DataPolicy).where(
-                        DataPolicy.application_id.in_([application.id for application, _ in known]),
-                        DataPolicy.policy_mnemonic.in_(wanted),
-                        _active_policy_scope(),
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        by_application: dict[int, dict[str, list[DataPolicy]]] = defaultdict(lambda: defaultdict(list))
-        for policy in policies:
-            by_application[policy.application_id][policy.policy_mnemonic].append(policy)
-
-        missing: list[str] = []
         matched: list[DataPolicy] = []
-        for application, mnemonics in known:
-            stored = by_application.get(application.id, {})
-            for mnemonic in mnemonics:
-                rows = stored.get(mnemonic)
+        missing: list[str] = []
+
+        if agent_app_mnemonics:
+            wanted = list(dict.fromkeys(agent_app_mnemonics))
+            policies = (
+                (
+                    await session.execute(
+                        select(DataPolicy).where(
+                            DataPolicy.policy_mnemonic.in_(wanted),
+                            _active_policy_scope(),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            by_mnemonic: dict[str, list[DataPolicy]] = defaultdict(list)
+            for policy in policies:
+                by_mnemonic[policy.policy_mnemonic].append(policy)
+            for mnemonic in wanted:
+                rows = by_mnemonic.get(mnemonic)
                 if not rows:
-                    missing.append(f"{application.application_mnemonic}: {mnemonic}")
+                    missing.append(f"{AGENT_APP_CLIENT}: {mnemonic}")
                 else:
                     matched.extend(rows)
+
+        if app_pairs:
+            applications = (
+                (
+                    await session.execute(
+                        select(Application).where(
+                            Application.application_mnemonic.in_([client_id for client_id, _ in app_pairs])
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            by_app_mnemonic = {application.application_mnemonic: application for application in applications}
+            known = [
+                (by_app_mnemonic[client_id], mnemonics)
+                for client_id, mnemonics in app_pairs
+                if client_id in by_app_mnemonic
+            ]
+            if known:
+                wanted = {mnemonic for _, mnemonics in known for mnemonic in mnemonics}
+                policies = (
+                    (
+                        await session.execute(
+                            select(DataPolicy).where(
+                                DataPolicy.application_id.in_([application.id for application, _ in known]),
+                                DataPolicy.policy_mnemonic.in_(wanted),
+                                _active_policy_scope(),
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                by_application: dict[int, dict[str, list[DataPolicy]]] = defaultdict(
+                    lambda: defaultdict(list)
+                )
+                for policy in policies:
+                    by_application[policy.application_id][policy.policy_mnemonic].append(policy)
+
+                for application, mnemonics in known:
+                    stored = by_application.get(application.id, {})
+                    for mnemonic in mnemonics:
+                        rows = stored.get(mnemonic)
+                        if not rows:
+                            missing.append(f"{application.application_mnemonic}: {mnemonic}")
+                        else:
+                            matched.extend(rows)
+
         if missing:
             raise BadRequestError(
                 message="Policy is not defined for this application: " + ", ".join(sorted(set(missing)))
             )
+        if not matched and not app_pairs and not agent_app_mnemonics:
+            return []
         return [self._to_policy_data(policy) for policy in matched]
 
     async def _role_sync(

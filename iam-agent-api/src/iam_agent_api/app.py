@@ -47,6 +47,7 @@ class Initializer(AuthInitializer):
         if _config.agent_api_url:
             self.return_app().add_middleware(
                 ResolvePermissionMiddleware,
+                client_id=_config.keycloak_client_id,
                 permissions_api_url=_config.agent_api_url,
             )
             self.return_app().add_middleware(

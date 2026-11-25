@@ -7,8 +7,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/Auth";
 import Pagination from "@/components/Pagination";
 import { CustomDropdown, ViewDataPolicyModal } from "@/features/data-policy/components";
-import { useAgency } from "@/features/data-policy/hooks/useAgency";
 import { useAllRegister, type Register } from "@/features/data-policy/hooks/useAllRegister";
+import { useRegistryApplications } from "@/features/data-policy/hooks/useRegistryApplications";
 
 const POLICY_TARGETS = [
   { label: "Register", value: "REGISTER_RECORD" },
@@ -163,8 +163,18 @@ export default function UsersPage() {
     searchParams.get("policyTarget") || "REGISTER_RECORD",
   );
   const [registerId, setRegisterId] = useState(searchParams.get("registerId") || "");
-  const { apiUrl: agencyApiUrl } = useAgency();
-  const { registers, loading: registersLoading } = useAllRegister(agencyApiUrl, 1, 100);
+  const [registryAppId, setRegistryAppId] = useState(searchParams.get("registryAppId") || "");
+  const { registries, loading: registriesLoading } = useRegistryApplications(
+    menu === "agent-data-policies",
+  );
+  const selectedRegistry = useMemo(
+    () => registries.find((item) => String(item.id) === String(registryAppId)),
+    [registries, registryAppId],
+  );
+  // Prefer registry agent_api_url; fall back to staff_api_url for testing.
+  const registerApiUrl =
+    selectedRegistry?.agent_api_url || selectedRegistry?.staff_api_url || null;
+  const { registers, loading: registersLoading } = useAllRegister(registerApiUrl, 1, 100);
 
   const agencyPolicies = useMemo(
     () => policies.filter((policy) => policy.policy_mnemonic.startsWith("AGC_")),
@@ -185,6 +195,14 @@ export default function UsersPage() {
     () => policies.filter((policy) => policy.policy_mnemonic.startsWith("AGT_")),
     [policies],
   );
+  const registryOptions = useMemo(
+    () =>
+      registries.map((registry) => ({
+        label: registry.application_description || registry.application_mnemonic,
+        value: String(registry.id),
+      })),
+    [registries],
+  );
   const registerOptions = useMemo(
     () =>
       (registers || []).map((register: Register) => ({
@@ -194,25 +212,37 @@ export default function UsersPage() {
     [registers],
   );
   const isRegisterTarget = policyTarget === "REGISTER_RECORD";
+  const registryReady = !isRegisterTarget || !!registryAppId;
   const canListAgentPolicies =
-    policyTarget === "ATTRIBUTE" || policyTarget === "GEO" || !!registerId;
+    registryReady &&
+    (policyTarget === "ATTRIBUTE" || policyTarget === "GEO" || !!registerId);
 
   useEffect(() => {
-    if (!isRegisterTarget || registersLoading || !registers.length) return;
+    if (!isRegisterTarget || !registryAppId || registersLoading || !registers.length) return;
     setRegisterId((prev) => {
       if (prev && registers.some((register: Register) => register.register_id === prev)) {
         return prev;
       }
       return registers[0]?.register_id || "";
     });
-  }, [isRegisterTarget, registersLoading, registers]);
+  }, [isRegisterTarget, registryAppId, registersLoading, registers]);
 
-  function updatePolicyFilters(nextTarget: string, nextRegisterId: string) {
+  function updatePolicyFilters(
+    nextTarget: string,
+    nextRegisterId: string,
+    nextRegistryAppId: string = registryAppId,
+  ) {
     setPolicyTarget(nextTarget);
     setRegisterId(nextRegisterId);
+    setRegistryAppId(nextRegistryAppId);
     const params = new URLSearchParams(searchParams.toString());
     params.set("menu", "agent-data-policies");
     params.set("policyTarget", nextTarget);
+    if (nextTarget === "REGISTER_RECORD" && nextRegistryAppId) {
+      params.set("registryAppId", nextRegistryAppId);
+    } else {
+      params.delete("registryAppId");
+    }
     if (nextTarget === "REGISTER_RECORD" && nextRegisterId) {
       params.set("registerId", nextRegisterId);
     } else {
@@ -432,18 +462,30 @@ export default function UsersPage() {
               <CustomDropdown
                 options={POLICY_TARGETS}
                 value={policyTarget}
-                onChange={(value) => updatePolicyFilters(value, "")}
+                onChange={(value) => updatePolicyFilters(value, "", "")}
                 placeholder="Select Policy Type"
               />
             </div>
+            {isRegisterTarget && (
+              <div className="w-56">
+                <CustomDropdown
+                  options={registryOptions}
+                  value={registryAppId}
+                  onChange={(value) => updatePolicyFilters(policyTarget, "", value)}
+                  loading={registriesLoading}
+                  placeholder={t("select_registry")}
+                />
+              </div>
+            )}
             {isRegisterTarget && (
               <div className="w-48">
                 <CustomDropdown
                   options={registerOptions}
                   value={registerId}
-                  onChange={(value) => updatePolicyFilters(policyTarget, value)}
+                  onChange={(value) => updatePolicyFilters(policyTarget, value, registryAppId)}
                   loading={registersLoading}
                   placeholder={t("select_register")}
+                  disabled={!registryAppId}
                 />
               </div>
             )}
@@ -455,7 +497,7 @@ export default function UsersPage() {
                 router.push(
                   `/data-policies/create?policyTarget=${policyTarget}${
                     registerId ? `&registerId=${registerId}` : ""
-                  }`,
+                  }${registryAppId ? `&registryAppId=${registryAppId}` : ""}`,
                 )
               }
             >
@@ -513,7 +555,9 @@ export default function UsersPage() {
         <>
           {!canListAgentPolicies ? (
             <p className="rounded-[10px] bg-white px-9 py-8 text-center text-[16px] text-gray-500">
-              {t("select_register_for_filter_fields")}
+              {isRegisterTarget && !registryAppId
+                ? t("select_registry_for_registers")
+                : t("select_register_for_filter_fields")}
             </p>
           ) : (
             <StaffTable
@@ -640,7 +684,11 @@ export default function UsersPage() {
                     <div>
                       <p className="mb-2 text-[16px] font-medium">{t("navAgentDataPolicies")}</p>
                       <pre className="overflow-auto rounded-[10px] bg-[#F3F1E4] p-4 text-[14px]">
-                        {JSON.stringify(form.policies, null, 2)}
+                        {JSON.stringify(
+                          (selected?.roles || []).filter((role) => role.startsWith("AGT_")),
+                          null,
+                          2,
+                        )}
                       </pre>
                     </div>
                   </div>

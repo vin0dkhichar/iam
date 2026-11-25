@@ -22,9 +22,17 @@ class Application(BaseORMModelWithTimes):
     icon_base64: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     width: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     application_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    # Backend API base URL used by IAM staff UI to load register fields for
-    # data policies. Optional; only registry applications set this.
-    api_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # True when this staff application is a registry (has register APIs for
+    # data-policy builders). Used to filter registry apps in the staff UI.
+    is_registry: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Registry staff API base URL. Staff UI uses this for register/fields/values
+    # when building DP_ / staff-scoped policies against that registry.
+    staff_api_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Registry agent API base URL (same response shape as staff). IAM agent UI
+    # and staff AGC_ policy builders use this for agency/agent data policies.
+    agent_api_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     order: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     # True for rows pushed in by an application (e.g. a registry self-registering
     # via the API), False for rows seeded from the bundled dataset. Used so the

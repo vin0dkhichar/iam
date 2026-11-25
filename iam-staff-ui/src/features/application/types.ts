@@ -4,7 +4,9 @@ export interface Application {
   application_type?: string | null;
   application_description?: string | null;
   application_url?: string | null;
-  api_url?: string | null;
+  is_registry?: boolean;
+  staff_api_url?: string | null;
+  agent_api_url?: string | null;
   icon_base64?: string | null;
   icon_mime_type?: string | null;
   order?: number | null;
@@ -69,7 +71,9 @@ export interface TabDefinition {
 export interface ApplicationForm {
   application_description: string;
   application_url: string;
-  api_url: string;
+  is_registry: boolean;
+  staff_api_url: string;
+  agent_api_url: string;
   order: string;
   width: string;
   icon_base64: string;

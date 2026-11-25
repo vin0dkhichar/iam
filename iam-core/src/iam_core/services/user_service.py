@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from iam_core.helpers.agency import (
     AGENCY_ADMIN_ROLE,
+    AGENT_APP_CLIENT,
     AGENT_PORTAL_CLIENT,
     merge_agency_client_roles,
     with_inherited_agc_roles,
@@ -28,6 +29,10 @@ def _normalize_email(email: str) -> str:
 
 
 def _agency_client_roles(user: User, agency_id: str) -> list[str]:
+    """Policy roles live on agent-app; fall back to legacy per-agency client."""
+    for entry in user.keycloak_clients or []:
+        if entry.get("client_id") == AGENT_APP_CLIENT:
+            return [role for role in (entry.get("roles") or []) if role]
     for entry in user.keycloak_clients or []:
         if entry.get("client_id") == agency_id:
             return [role for role in (entry.get("roles") or []) if role]

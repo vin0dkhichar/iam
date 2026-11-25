@@ -86,11 +86,13 @@ class ApplicationsController(BaseController):
             applications: list[ApplicationData]
             total: int
             application_type = None
+            is_registry = None
             payload = get_request.request_body.request_payload
             if payload is not None:
                 application_type = payload.application_type
+                is_registry = payload.is_registry
             applications, total = await self.applications_service.get_applications(
-                page, page_size, application_type
+                page, page_size, application_type, is_registry=is_registry
             )
             return self.helper.construct_payload_response(
                 get_request,

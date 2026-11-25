@@ -78,7 +78,7 @@ class TokenValidatorService(BaseService):
         jwt_token: str,
         jwt_id_token: str | None,
         api_auth_settings: ApiAuthSettings,
-        application_type: str | None = None,
+        application_types: list[str] | None = None,
     ) -> AuthCredentials:
         try:
             unverified_payload = jose_jwt.get_unverified_claims(jwt_token)
@@ -89,7 +89,18 @@ class TokenValidatorService(BaseService):
         login_provider = await self._get_login_provider_db_by_iss(iss)
         if not login_provider:
             raise UnauthorizedError(message=f"Unauthorized. Unknown Issuer. {iss}")
-        # application_type is kept for callers but not used to filter LPs (issuer match only).
+        # Hardcoded allow-list from the calling middleware (e.g. registry=["staff"],
+        # master-data=["staff","agent"]). Issuer resolves the LP; this gates its type.
+        if application_types is not None:
+            allowed = {item for item in application_types if item}
+            lp_type = getattr(login_provider, "application_type", None)
+            if allowed and lp_type not in allowed:
+                raise UnauthorizedError(
+                    message=(
+                        f"Unauthorized. Login provider application_type '{lp_type}' "
+                        f"not in {sorted(allowed)}."
+                    )
+                )
 
         self._validate_iss_aud(unverified_payload, login_provider)
         adapter = self._adapters.resolve_for_provider(login_provider)

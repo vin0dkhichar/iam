@@ -14,7 +14,12 @@ import { DataPolicyFormModal, CustomDropdown, ViewDataPolicyModal } from "@/feat
 import { getDataPolicyColumns } from "@/features/data-policy/utils/tableColumns";
 import { DataPolicy } from "@/features/data-policy/types";
 import { DATA_POLICY_ACTIONS } from "@/shared/permissions/actions";
-import { usePolicies, useAllRegister, type Register } from "@/features/data-policy/hooks";
+import {
+  usePolicies,
+  useAllRegister,
+  useRegistryApplications,
+  type Register,
+} from "@/features/data-policy/hooks";
 
 interface DataPoliciesTabProps {
   applicationId: number;
@@ -44,19 +49,37 @@ export default function DataPoliciesTab({
 
   const urlPolicyTarget = searchParams.get('policyTarget') || 'REGISTER_RECORD';
   const urlRegisterId = searchParams.get('registerId') || '';
+  const urlRegistryAppId = searchParams.get('registryAppId') || '';
 
   const [page, setPage] = useState(1);
   const [selectedPolicyTarget, setSelectedPolicyTarget] = useState(urlPolicyTarget);
   const [selectedRegisterId, setSelectedRegisterId] = useState(urlRegisterId);
+  const [selectedRegistryAppId, setSelectedRegistryAppId] = useState(urlRegistryAppId);
   const [dpModal, setDpModal] = useState(false);
   const [viewModal, setViewModal] = useState<{ open: boolean; data?: DataPolicy }>({ open: false });
   const wasActive = useRef(false);
 
+  const { registries, loading: registriesLoading } = useRegistryApplications(isAgency);
+  const selectedRegistry = useMemo(
+    () => registries.find((item) => String(item.id) === String(selectedRegistryAppId)),
+    [registries, selectedRegistryAppId],
+  );
+  // Agency AGC_ builders prefer registry agent_api_url (same shape as staff);
+  // fall back to staff_api_url when agent portal is not deployed yet.
+  const registerApiUrl = isAgency
+    ? selectedRegistry?.agent_api_url || selectedRegistry?.staff_api_url
+    : apiUrl;
+
   // Update URL when selections change
-  const updateUrl = (policyTarget: string, registerId: string) => {
+  const updateUrl = (policyTarget: string, registerId: string, registryAppId: string) => {
     const params = new URLSearchParams(searchParams.toString());
     if (policyTarget) {
       params.set('policyTarget', policyTarget);
+    }
+    if (isAgency && registryAppId) {
+      params.set('registryAppId', registryAppId);
+    } else {
+      params.delete('registryAppId');
     }
     if (registerId && policyTarget === 'REGISTER_RECORD') {
       params.set('registerId', registerId);
@@ -69,12 +92,18 @@ export default function DataPoliciesTab({
   const handlePolicyTargetChange = (value: string) => {
     setSelectedPolicyTarget(value);
     setSelectedRegisterId('');
-    updateUrl(value, '');
+    updateUrl(value, '', selectedRegistryAppId);
+  };
+
+  const handleRegistryChange = (value: string) => {
+    setSelectedRegistryAppId(value);
+    setSelectedRegisterId('');
+    updateUrl(selectedPolicyTarget, '', value);
   };
 
   const handleRegisterChange = (value: string) => {
     setSelectedRegisterId(value);
-    updateUrl(selectedPolicyTarget, value);
+    updateUrl(selectedPolicyTarget, value, selectedRegistryAppId);
   };
 
   // Confirm dialog state
@@ -87,11 +116,16 @@ export default function DataPoliciesTab({
   }>({ open: false, message: "", onConfirm: async () => { } });
   const [confirming, setConfirming] = useState(false);
 
-  const { registers, loading: registersLoading } = useAllRegister(apiUrl, 1, 100);
+  const { registers, loading: registersLoading } = useAllRegister(registerApiUrl, 1, 100);
   const firstRegisterId = registers[0]?.register_id ?? '';
 
   const isRegisterTarget = selectedPolicyTarget === 'REGISTER_RECORD';
-  const canListPolicies = selectedPolicyTarget === 'ATTRIBUTE' || selectedPolicyTarget === 'GEO' || !!selectedRegisterId;
+  const registryReady = !isAgency || !isRegisterTarget || !!selectedRegistryAppId;
+  const canListPolicies =
+    registryReady &&
+    (selectedPolicyTarget === 'ATTRIBUTE' ||
+      selectedPolicyTarget === 'GEO' ||
+      !!selectedRegisterId);
 
   const { policies, pagination, loading, error: policiesError, refresh } = usePolicies(
     selectedRegisterId,
@@ -202,6 +236,20 @@ export default function DataPoliciesTab({
                 placeholder="Select Policy Type"
               />
             </div>
+            {isAgency && isRegisterTarget && (
+              <div className="w-56">
+                <CustomDropdown
+                  options={registries.map((item) => ({
+                    label: item.application_description || item.application_mnemonic,
+                    value: String(item.id),
+                  }))}
+                  value={selectedRegistryAppId}
+                  onChange={handleRegistryChange}
+                  loading={registriesLoading}
+                  placeholder="Select registry"
+                />
+              </div>
+            )}
             {isRegisterTarget && (
               <>
                 <span className="text-[20px] font-medium text-black">
@@ -214,6 +262,7 @@ export default function DataPoliciesTab({
                     onChange={handleRegisterChange}
                     loading={registersLoading}
                     placeholder="Select register"
+                    disabled={isAgency && !selectedRegistryAppId}
                   />
                 </div>
               </>
@@ -221,7 +270,13 @@ export default function DataPoliciesTab({
             <AddButton
               onClick={() => {
                 const section = pathname.includes("/agencies/") ? "agencies" : "applications";
-                router.push(`/${section}/${applicationId}/data-policies/create?policyTarget=${selectedPolicyTarget}${selectedRegisterId ? `&registerId=${selectedRegisterId}` : ""}`);
+                const registryQuery =
+                  isAgency && selectedRegistryAppId
+                    ? `&registryAppId=${selectedRegistryAppId}`
+                    : "";
+                router.push(
+                  `/${section}/${applicationId}/data-policies/create?policyTarget=${selectedPolicyTarget}${selectedRegisterId ? `&registerId=${selectedRegisterId}` : ""}${registryQuery}`,
+                );
               }}
               disabled={!canListPolicies}
             />
@@ -234,7 +289,11 @@ export default function DataPoliciesTab({
 
         {!canListPolicies ? (
           <div className="px-9 text-sm text-gray-500 text-center py-8">
-            {isRegisterTarget ? 'Select a register to view policies' : 'Loading...'}
+            {isAgency && isRegisterTarget && !selectedRegistryAppId
+              ? "Select a registry to view policies"
+              : isRegisterTarget
+                ? "Select a register to view policies"
+                : "Loading..."}
           </div>
         ) : (
           <>
@@ -266,7 +325,7 @@ export default function DataPoliciesTab({
       {dpModal && (
         <DataPolicyFormModal
           applicationId={applicationId}
-          apiUrl={apiUrl}
+          apiUrl={registerApiUrl}
           policyTarget={selectedPolicyTarget}
           registerId={selectedRegisterId}
           onClose={() => setDpModal(false)}

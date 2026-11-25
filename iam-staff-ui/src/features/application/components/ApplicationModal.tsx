@@ -2,6 +2,7 @@
 
 import { useTranslations } from "next-intl";
 import {
+  CheckboxField,
   IconBase64Field,
   InputField,
   Modal,
@@ -13,7 +14,9 @@ interface ApplicationForm {
   application_mnemonic: string;
   application_description: string;
   application_url: string;
-  api_url: string;
+  is_registry: boolean;
+  staff_api_url: string;
+  agent_api_url: string;
   order: string;
   width: string;
   icon_base64: string;
@@ -33,7 +36,9 @@ const emptyForm: ApplicationForm = {
   application_mnemonic: "",
   application_description: "",
   application_url: "",
-  api_url: "",
+  is_registry: false,
+  staff_api_url: "",
+  agent_api_url: "",
   order: "",
   width: "",
   icon_base64: "",
@@ -79,10 +84,22 @@ export default function ApplicationModal({
                 onChange={(value) => onChange("application_url", value)}
                 className="col-span-full"
               />
+              <CheckboxField
+                label={t("isRegistry")}
+                checked={Boolean(form.is_registry)}
+                onChange={(checked) => onChange("is_registry", checked)}
+                className="col-span-full"
+              />
               <InputField
-                label={t("apiUrl")}
-                value={form.api_url}
-                onChange={(value) => onChange("api_url", value)}
+                label={t("staffApiUrl")}
+                value={form.staff_api_url}
+                onChange={(value) => onChange("staff_api_url", value)}
+                className="col-span-full"
+              />
+              <InputField
+                label={t("agentApiUrl")}
+                value={form.agent_api_url}
+                onChange={(value) => onChange("agent_api_url", value)}
                 className="col-span-full"
               />
               <InputField

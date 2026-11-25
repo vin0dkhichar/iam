@@ -12,6 +12,7 @@ import {
   useAllAttributes,
   useG2pGeoLevels,
   useRegisterFields,
+  useRegistryApplications,
   type Register,
 } from "@/features/data-policy/hooks";
 import CustomDropdown from "@/features/data-policy/components/CustomDropdown";
@@ -46,10 +47,21 @@ export default function CreateDataPolicyPage({ params }: { params: Promise<{ id:
   const resolvedParams = use(params);
   const applicationId = parseInt(resolvedParams.id);
   const { app, loadApp } = useApplicationData(applicationId);
-  const apiUrl = app?.api_url;
-  const { registers, loading: registersLoading } = useAllRegister(apiUrl, 1, 100);
+  const isAgency = app?.application_type === "agent";
   const policyTarget = searchParams.get('policyTarget') || 'REGISTER_RECORD';
   const registerIdParam = searchParams.get('registerId') || '';
+  const registryAppIdParam = searchParams.get('registryAppId') || '';
+  const { registries } = useRegistryApplications(Boolean(isAgency));
+  const selectedRegistry = useMemo(
+    () => registries.find((item) => String(item.id) === String(registryAppIdParam)),
+    [registries, registryAppIdParam],
+  );
+  // Agency AGC_ builders prefer registry agent_api_url; fall back to staff_api_url
+  // when agent portal is not deployed yet. Staff DP_ uses staff_api_url.
+  const apiUrl = isAgency
+    ? selectedRegistry?.agent_api_url || selectedRegistry?.staff_api_url
+    : app?.staff_api_url;
+  const { registers, loading: registersLoading } = useAllRegister(apiUrl, 1, 100);
 
   const [registerId, setRegisterId] = useState(registerIdParam);
   const [policyMnemonic, setPolicyMnemonic] = useState('');

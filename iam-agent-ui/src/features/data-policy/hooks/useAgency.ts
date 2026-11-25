@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 export type AgencyInfo = {
   agency_id: string;
   name?: string | null;
-  api_url?: string | null;
+  staff_api_url?: string | null;
+  agent_api_url?: string | null;
 };
 
 export function useAgency() {
@@ -51,5 +52,10 @@ export function useAgency() {
     };
   }, []);
 
-  return { agency, apiUrl: agency?.api_url ?? null, loading, error };
+  return {
+    agency,
+    apiUrl: agency?.agent_api_url ?? agency?.staff_api_url ?? null,
+    loading,
+    error,
+  };
 }

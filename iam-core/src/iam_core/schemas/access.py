@@ -11,4 +11,5 @@ class RoleLookup(BaseModel):
 
 
 class PermissionsLookupResponse(BaseModel):
-    permissions: list[str] = Field(default_factory=list)
+    # client_id -> permission mnemonics for that client's roles only
+    permissions: dict[str, list[str]] = Field(default_factory=dict)

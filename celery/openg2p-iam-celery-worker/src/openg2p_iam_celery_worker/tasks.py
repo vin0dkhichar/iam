@@ -9,7 +9,7 @@ from openg2p_fastapi_common.errors.http_exceptions import BadRequestError
 
 from iam_core.helpers.keycloak_admin import KeycloakAdmin, KeycloakAdminError
 from iam_core.helpers.keycloak_admin_config import ProvisioningSettings
-from iam_core.helpers.agency import AGENT_PORTAL_CLIENT
+from iam_core.helpers.agency import AGENT_APP_CLIENT, AGENT_PORTAL_CLIENT
 from iam_core.models.application import Application
 from iam_core.models.data_policy import DataPolicy
 from iam_core.models.application_permission import ApplicationPermission
@@ -18,6 +18,7 @@ from iam_core.models.role import Role
 from iam_core.models.role_permission import RolePermission
 from iam_core.models.user import User
 from iam_core.services.user_role_assignment import assign_client_roles
+from iam_core.user_auth.helpers.data_policy_role_helper import AGC_ROLE_PREFIX, AGT_ROLE_PREFIX
 
 from .app import celery_app
 
@@ -84,13 +85,30 @@ async def _delete_application(session, admin: KeycloakAdmin, application: Applic
     await session.flush()
 
 
+def _keycloak_client_for_role(application: Application, role_mnemonic: str) -> str:
+    """Resolve Keycloak client for a Role row.
+
+    Agency (application_type=agent) AGC_/AGT_ policy roles are created on
+    ``agent-app``. Everything else — including staff DP_ roles — stays on the
+    application's own Keycloak client (``application_mnemonic``).
+    """
+    mnemonic = str(role_mnemonic or "")
+    is_agency = application.application_type == ApplicationType.AGENT.value
+    if is_agency and (
+        mnemonic.startswith(AGC_ROLE_PREFIX) or mnemonic.startswith(AGT_ROLE_PREFIX)
+    ):
+        return AGENT_APP_CLIENT
+    return application.application_mnemonic
+
+
 async def _delete_role(session, admin: KeycloakAdmin, role: Role) -> None:
     application = await session.get(Application, role.application_id)
     if application is not None:
         realm = keycloak_realm(application.application_type, admin._settings)
+        client_id = _keycloak_client_for_role(application, role.role_mnemonic)
         try:
             async with httpx.AsyncClient(timeout=20) as http:
-                client_uuid = await admin.find_client_uuid(http, realm, application.application_mnemonic)
+                client_uuid = await admin.find_client_uuid(http, realm, client_id)
                 if client_uuid:
                     await admin.delete_client_role(http, realm, client_uuid, role.role_mnemonic)
         except KeycloakAdminError as exc:
@@ -238,11 +256,12 @@ async def provision_role(session, admin: KeycloakAdmin, role: Role) -> None:
         await session.flush()
         return
     realm = keycloak_realm(application.application_type, admin._settings)
+    client_id = _keycloak_client_for_role(application, role.role_mnemonic)
     try:
         async with httpx.AsyncClient(timeout=20) as http:
-            client_uuid = await admin.find_client_uuid(http, realm, application.application_mnemonic)
+            client_uuid = await admin.find_client_uuid(http, realm, client_id)
             if not client_uuid:
-                raise KeycloakAdminError(f"Keycloak client not found: {application.application_mnemonic}")
+                raise KeycloakAdminError(f"Keycloak client not found: {client_id}")
             await admin.create_client_role(http, realm, client_uuid, role.role_mnemonic)
     except KeycloakAdminError as exc:
         role.sync_status = SyncStatus.FAILED.value

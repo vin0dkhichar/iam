@@ -75,6 +75,8 @@
   "policy_description": "Policy Description",
   "enter_policy_description": "Enter policy description",
   "select_register": "Select register",
+  "select_registry": "Select registry",
+  "select_registry_for_registers": "Select a registry to view registers",
   "select_register_for_filter_fields": "Select a register to view filter fields",
   "register_required": "Register is required",
   "loading_filter_fields": "Loading filter fields...",

@@ -6,7 +6,12 @@ from openg2p_fastapi_common.controller import BaseController
 from openg2p_fastapi_common.errors.http_exceptions import BadRequestError, ForbiddenError
 from sqlalchemy import select
 
-from iam_core.helpers.agency import AGENCY_ADMIN_ROLE, AGENT_PORTAL_CLIENT, merge_agency_client_roles
+from iam_core.helpers.agency import (
+    AGENCY_ADMIN_ROLE,
+    AGENT_APP_CLIENT,
+    AGENT_PORTAL_CLIENT,
+    merge_agency_client_roles,
+)
 from iam_core.models.application import Application
 from iam_core.models.enum import ApplicationType, SyncAction, SyncStatus
 from iam_core.models.role import Role
@@ -38,20 +43,28 @@ from ..schemas import (
     CreateAgentBody,
     CreateAgentResponse,
     ListUsersBody,
+    RegistryApplicationItem,
+    RegistryApplicationsResponse,
     RemoveAgentPolicyBody,
     RemoveAgentPolicyResponse,
 )
 
 
 def _user_roles(user) -> list[str]:
-    """Roles on the agency client only. AGENCY_ADMIN on agent-portal stays out of this list."""
+    """AGC_/AGT_ roles from agent-app (legacy per-agency client still accepted).
+
+    AGENCY_ADMIN on agent-portal stays out of this list.
+    """
     agency_id = user.agency_id
+    allowed_clients = {AGENT_APP_CLIENT}
+    if agency_id:
+        allowed_clients.add(agency_id)
     roles: list[str] = []
     for entry in user.keycloak_clients or []:
         client_id = entry.get("client_id")
         if client_id in {AGENT_PORTAL_CLIENT, "agency-web"}:
             continue
-        if agency_id and client_id != agency_id:
+        if client_id not in allowed_clients:
             continue
         for role in entry.get("roles") or []:
             if role and role != AGENCY_ADMIN_ROLE:
@@ -81,6 +94,7 @@ class UsersController(BaseController):
         self._service = UserService()
         self.router.add_api_route("", self.list_users, methods=["POST"])
         self.router.add_api_route("/agency", self.get_agency, methods=["POST"])
+        self.router.add_api_route("/registries", self.list_registries, methods=["POST"])
         # Roles menu removed from agent UI — keep handler, comment route.
         # self.router.add_api_route("/roles", self.list_roles, methods=["POST"])
         self.router.add_api_route("/data-policies", self.list_data_policies, methods=["POST"])
@@ -92,7 +106,7 @@ class UsersController(BaseController):
 
     @requires_auth
     async def get_agency(self, request: Request) -> AgencyResponse:
-        """Current agency from the token, including api_url for registry BFF calls."""
+        """Current agency from the token, including staff/agent API URLs for BFF calls."""
         agency_id = agency_id_from_request(request)
         require_agency_admin(request)
         session_maker = get_async_session_maker()
@@ -109,7 +123,41 @@ class UsersController(BaseController):
         return AgencyResponse(
             agency_id=agency.application_mnemonic,
             name=agency.application_description,
-            api_url=agency.api_url,
+            staff_api_url=agency.staff_api_url,
+            agent_api_url=agency.agent_api_url,
+        )
+
+    @requires_auth
+    async def list_registries(self, request: Request) -> RegistryApplicationsResponse:
+        """Staff applications flagged is_registry — for AGT_ register pickers."""
+        require_agency_admin(request)
+        session_maker = get_async_session_maker()
+        async with session_maker() as session:
+            apps = (
+                await session.execute(
+                    select(Application)
+                    .where(
+                        Application.active.is_(True),
+                        Application.application_type == ApplicationType.STAFF.value,
+                        Application.is_registry.is_(True),
+                    )
+                    .order_by(
+                        Application.order.asc().nullslast(),
+                        Application.id.asc(),
+                    )
+                )
+            ).scalars().all()
+        return RegistryApplicationsResponse(
+            items=[
+                RegistryApplicationItem(
+                    id=app.id,
+                    application_mnemonic=app.application_mnemonic,
+                    application_description=app.application_description,
+                    staff_api_url=app.staff_api_url,
+                    agent_api_url=app.agent_api_url,
+                )
+                for app in apps
+            ]
         )
 
     @requires_auth
@@ -216,13 +264,15 @@ class UsersController(BaseController):
         """Create an AGT_ agency policy + pending Keycloak role for Celery sync."""
         agency_id = agency_id_from_request(request)
         require_agency_admin(request)
-        bare = body.policy_mnemonic.strip()
-        for known in (AGT_ROLE_PREFIX, AGC_ROLE_PREFIX, DP_ROLE_PREFIX):
-            if bare.upper().startswith(known.upper()):
-                bare = bare[len(known) :].strip()
-        if not bare:
-            raise BadRequestError(message="policy_mnemonic is required")
-        mnemonic = f"{AGT_ROLE_PREFIX}{bare}"
+        from iam_core.user_auth.helpers.data_policy_role_helper import agency_scoped_policy_mnemonic
+
+        try:
+            # AGT_<agency>_<name> — roles land on agent-app Keycloak client.
+            mnemonic = agency_scoped_policy_mnemonic(
+                AGT_ROLE_PREFIX, agency_id, body.policy_mnemonic
+            )
+        except ValueError as exc:
+            raise BadRequestError(message="policy_mnemonic is required") from exc
         # Staff UI historically used DENY; IAM stores DISALLOW.
         raw_type = (body.policy_type or "ALLOW").strip().upper()
         if raw_type == "DENY":
@@ -345,7 +395,7 @@ class UsersController(BaseController):
                 first_name=body.first_name,
                 last_name=body.last_name,
                 agency_id=agency_id,
-                keycloak_clients=[{"client_id": agency_id, "roles": roles}],
+                keycloak_clients=merge_agency_client_roles(None, agency_id, roles),
             )
             await session.commit()
             user_id = user.id

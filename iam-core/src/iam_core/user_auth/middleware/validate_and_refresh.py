@@ -32,12 +32,13 @@ class ValidateAndRefreshTokenMiddleware(BaseHTTPMiddleware):
         *,
         state_key: str | RequestStateKey = RequestStateKey.AUTH,
         user_state_key: str | RequestStateKey = RequestStateKey.USER,
-        application_type: str | None = None,
+        application_types: list[str] | None = None,
     ):
         super().__init__(app)
         self._state_key = str(state_key)
         self._user_state_key = str(user_state_key)
-        self._application_type = application_type
+        # Hardcoded per service, e.g. ["staff"] or ["staff", "agent"].
+        self._application_types = list(application_types) if application_types else None
 
     def _apply_refreshed_tokens_to_request(self, request: Request, token_response: dict) -> None:
         """Patch request headers/cookies so downstream handlers see the new tokens."""
@@ -94,7 +95,7 @@ class ValidateAndRefreshTokenMiddleware(BaseHTTPMiddleware):
                 request,
                 jwt_token=access_token,
                 jwt_id_token=id_token,
-                application_type=self._application_type,
+                application_types=self._application_types,
             )
         except ExpiredTokenError:
             refreshed_tokens = await self._refresh_access_token(request)
@@ -104,7 +105,7 @@ class ValidateAndRefreshTokenMiddleware(BaseHTTPMiddleware):
                 request,
                 jwt_token=refreshed_tokens["access_token"],
                 jwt_id_token=refreshed_tokens.get("id_token"),
-                application_type=self._application_type,
+                application_types=self._application_types,
             )
 
         return auth_principal_from_credentials(credentials), refreshed_tokens
